@@ -13,8 +13,11 @@ s = 'pipeline/maps/ne_50m_admin_0_map_subunits.shp'
 
 
 class CountryContainer(object):
+    """CountryContainer
+    
+    The CountryContainer is an object to store countries
     """
-    """
+
     def __init__(self):
         self.regions = defaultdict(list)
         self.countries = dict()
@@ -29,16 +32,23 @@ class CountryContainer(object):
         
         self.c.append(c)
 
-        self.countries[c.gu_a3] = c
         self.countries[c.name] = c
         self.countries[c.name_long] = c
         self.countries[c.abbrev] = c
-        self.countries[c.postal] = c
+
+        if c.homepart == 1.0:
+            self.countries[c.gu_a3] = c
+            self.countries[c.postal] = c
     
+        self.regions[c.sovereignt].append(c)
         self.regions[c.continent].append(c)
         self.regions[c.region_un].append(c)
         self.regions[c.subregion].append(c)
         self.regions[c.region_wb].append(c)
+
+        if c.continent not in ['Oceania', 'Antarctica']:
+            self.regions['world'].append(c)
+            self.regions['World'].append(c)
 
     def add_countries(self, countries, **kwargs):
         for c in countries:
@@ -48,7 +58,7 @@ class CountryContainer(object):
         return self.c.__iter__()
 
     def __getitem__(self, i):
-        if type(i) is int:
+        if type(i) is int or type(i) is slice:
             return self.c.__getitem__(i)
         if type(i) is str:
             if i in self.regions:
@@ -75,7 +85,7 @@ class CountryContainer(object):
         return opt
 
     def get_boundary_polygon(self, simplify_level=0.5, buffer_lvl=1,
-                             min_area=0.5, return_type="array"):
+                             min_area=0.95, return_type="array"):
         """get_boundary_polygon
         Gets a polygon around all countries in the CountryContainer
 
@@ -111,9 +121,7 @@ class CountryContainer(object):
             patches.extend(c.get_patch_area(min_area))
         continent = ops.cascaded_union(patches)
 
-        print "buffering boundary", buffer_lvl
         continent = continent.buffer(buffer_lvl)
-        print type(continent), "continent type"
 
         if return_type == "array":
             try:
@@ -123,8 +131,10 @@ class CountryContainer(object):
         elif return_type == 'polygon':
             try:
                 np.array(continent.exterior.coords.xy)
+                print "continent is single"
                 return continent
             except:
+                print "continent is nonsingle", len(continent)
                 return continent.convex_hull
         raise ValueError("invalid return_type: %s", return_type)
 
@@ -208,6 +218,12 @@ class Country(object):
 
     def get_maxx(self):
         return max(self.patch.envelope.exterior.xy[0])
+
+    def get_miny(self):
+        return min(self.patch.envelope.exterior.xy[1])
+
+    def get_maxy(self):
+        return max(self.patch.envelope.exterior.xy[1])
     
     def wrap_americas(self, wrapping_point=-50):
         if self.get_maxx() < wrapping_point or\
@@ -232,6 +248,9 @@ class Country(object):
 
         if new:
             finalize_plot(fig, ax)
+
+    def remove_northern_islands(self, limit=None):
+        pass
 
 
 class CountryP(Country):
@@ -262,9 +281,22 @@ class CountryMP(Country):
                     self.get_minx() < wrapping_point:
                 self.patch = translate(self.patch, xoff=360.)
 
-
     def get_patch_area(self, area_limit=0):
-        return [p for p in self.patch if p.area > area_limit]
+        try:
+            return [p for p in self.patch if p.area > area_limit]
+        except TypeError:
+            if self. patch.area <= area_limit:
+                return []
+            return [self.patch]
+
+    def remove_northern_islands(self, limit=75.):
+        if not hasattr(self.patch, 'geoms'):
+            return
+        q = [g for g in self.patch.geoms
+             if max(g.envelope.exterior.xy[1]) < limit or g.area > 100]
+        self.patch = MultiPolygon(q)
+
+
     
     @property
     def area(self):
@@ -286,6 +318,7 @@ def handle_special_countries(c):
     c['Malaysia'].__class__ = c['Iceland'].__class__
     c['Hawaii'].continent = ''
     c['Falkland Is.'].continent = ''
+    
 
 
 def load_countries(s, wrap_americas=True):
@@ -311,6 +344,10 @@ def load_countries(s, wrap_americas=True):
     handle_special_countries(special_countries)
     if wrap_americas:
         countries.wrap_americas()
+
+    russia = countries['Russia', 'Norway', 'Greenland']
+    for r in russia:
+        r.remove_northern_islands(limit=70)
     return countries
 
 

@@ -124,6 +124,16 @@ int main(int argc, char** argv)
       if (iter>=0) {
 	eems.print_iteration(mcmc);
 	eems.save_iteration(mcmc);
+
+	if (params.saveMatrices == 1){
+	  eems.save_matrices();
+	}
+	if (iter % params.numOutputIter == 1){
+	  error = eems.output_results(mcmc);
+	  error = eems.output_current_state( );
+	}
+
+	if (error) { cerr << "[RunMCMC] Error saving eems results to " << eems.mcmcpath() << endl; }
       }      
       mcmc.end_iteration( );
     }

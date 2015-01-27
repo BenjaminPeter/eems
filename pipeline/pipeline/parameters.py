@@ -196,7 +196,7 @@ class Parameters(utils.parameters.Parameters):
                             for simplicity (default 1)
                             """)
         parser.add_argument('--sample-buffer', '--sample_buffer',
-                            default=.5,
+                            default=1.,
                             type=float,
                             help="""how much space should there be between the
                             samples and the boundary of the eems surface.

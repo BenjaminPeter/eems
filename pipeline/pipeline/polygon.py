@@ -99,20 +99,25 @@ def get_eems_area(params, meta_data):
         the potentially filtered meta_data object
     """
 
+    create_points(meta_data)
     if params.polygon is None and params.region is not None:
         poly1 = get_region_polygon(params.region, params.map,
                                    params.region_buffer, params.wrap)
+        print "case 1"
     elif params.polygon is not None and params.region is None:
         poly1 = get_polygon(params.polygon, wrap=True)
+        print "case 2"
     elif params.polygon is None and params.region is None:
         poly1 = None
+        print "case 3"
     elif params.polygon is not None and params.region is not None:
         poly_region = get_region_polygon(params.region, params.map,
                                          params.region_buffer, params.wrap)
         poly_file = get_polygon(params.polygon, wrap=True)
-        print type(poly_region), type(poly_file)
         poly1 = poly_region.intersection(poly_file)
+        print "case 4"
 
+    print "loaded polygons"
 
     # hulls depend on trhe data
     if poly1 is not None:
@@ -155,8 +160,10 @@ def get_region_polygon(region, map_file='', rbuffer=1, wrap=True):
         return None
 
     countries = load_countries(map_file, wrap_americas=wrap)
+    print 'loaded countries'
     eems_region = countries[region]
     polygon = eems_region.get_boundary_polygon(min_area=0.9,
                                                buffer_lvl=rbuffer,
                                                return_type="polygon")
+    print 'got boundary polygon'
     return polygon

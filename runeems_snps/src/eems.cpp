@@ -46,6 +46,7 @@ void EEMS::rnorm_effects(const double HalfInterval, const double rateS2, VectorX
     Effcts(i) = draw.rtrnorm(0.0,rateS2,HalfInterval);
   }
 }
+
 void EEMS::initialize_diffs( ) {
   cerr << "[Diffs::initialize]" << endl;
   n_2 = (double)n/2.0; nmin1 = n-1; logn = log(n);
@@ -633,6 +634,46 @@ void EEMS::save_iteration(const MCMC &mcmc) {
   B += 0.5 * nowq.transpose().replicate(o,1);
   JtDhatJ += sigma2 * B;
 }
+void EEMS::save_matrices( ) const{
+
+  // create the entire n by n fitted distance matrix
+  
+  MatrixXd B = nowBinv.inverse();
+  MatrixXd Delta = J * B * J.transpose();
+  MatrixXd Ones = MatrixXd::Ones(1,n);
+  Delta += J * (nowq * qconst) * Ones / 2.;
+  Delta += Ones.transpose() * (nowq*qconst) * J.transpose() / 2.;
+  VectorXd Jw = J * (nowq*qconst);
+  MatrixXd Diagonal = Jw.asDiagonal();
+  Delta -= Diagonal;
+  
+/*
+  VectorXi mColors, qColors;
+  graph.index_closest_to_deme(mSeeds,mColors);
+  graph.index_closest_to_deme(qSeeds,qColors);
+  VectorXd q = VectorXd::Zero(d);
+  for ( int alpha = 0 ; alpha < d ; alpha++ ) {
+    double log10m = qEffcts(qColors(alpha)); // qrateMu = 0.0
+    q(alpha) = pow(10.0,log10m);
+  }
+  MatrixXd M = MatrixXd::Zero(d,d);
+  int alpha, beta;
+  for ( int edge = 0 ; edge < graph.get_num_edges() ; edge++ ) {
+    graph.get_edge(edge,alpha,beta);
+    double log10m1 = mEffcts(mColors(alpha)) + mrateMu;
+    double log10m2 = mEffcts(mColors(beta)) + mrateMu;
+    M(alpha,beta) = 0.5 * pow(10.0,log10m1) + 0.5 * pow(10.0,log10m2);
+  }
+  MatrixXd Delta = expected_dissimilarities(J, (M + M.transpose()) * Binvconst, q * qconst);
+  */
+
+  ofstream out;
+  out.open((params.mcmcpath + "/Delta.txt").c_str(),ofstream::out |
+		  ofstream::app);
+  out << setprecision(10) << Delta << endl;
+  out.close( );
+
+}
 bool EEMS::output_current_state( ) const {
   ofstream out; bool error = false;
   out.open((params.mcmcpath + "/lastqtiles.txt").c_str(),ofstream::out);
@@ -714,7 +755,7 @@ bool EEMS::output_results(const MCMC &mcmc) const {
   out.close( );
   out.open((params.mcmcpath + "/mcmcthetas.txt").c_str(),ofstream::out);
   if (!out.is_open()) { return false; }
-  out << fixed << setprecision(6) << mcmcthetas << endl;
+  out << fixed << setprecision(10) << mcmcthetas << endl;
   out.close( );
   out.open((params.mcmcpath + "/mcmcqhyper.txt").c_str(),ofstream::out);
   if (!out.is_open()) { return false; }

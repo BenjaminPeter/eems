@@ -18,6 +18,8 @@ Params::Params(const string &params_file, const long seed_from_command_line) {
       ("numMCMCIter", po::value<int>(&numMCMCIter)->default_value(1), "numMCMCIter")
       ("numBurnIter", po::value<int>(&numBurnIter)->default_value(0), "numBurnIter")
       ("numThinIter", po::value<int>(&numThinIter)->default_value(0), "numThinIter")
+      ("numOutputIter", po::value<int>(&numOutputIter)->default_value(100000000), "numOutputIter")
+      ("saveMatrices", po::value<int>(&saveMatrices)->default_value(0), "saveMatrices")
       ("mSeedsProposalS2", po::value<double>(&mSeedsProposalS2)->default_value(0.01), "mSeedsProposalS2")
       ("qSeedsProposalS2", po::value<double>(&qSeedsProposalS2)->default_value(0.1), "qSeedsProposalS2")
       ("mEffctProposalS2", po::value<double>(&mEffctProposalS2)->default_value(0.1), "mEffctProposalS2")

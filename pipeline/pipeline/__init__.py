@@ -9,8 +9,11 @@ def run(params):
     sample_data = load_sample_file(params.sample, params.sample_header)
 
     meta_data = sample_data.merge(location_data)
+    print "loaded meta data"
     polygon, meta_data = get_eems_area(params, meta_data)
+    print "got area"
     filter_data(meta_data, params.bed)
+    print "filtered data"
     write_all_files(params, meta_data, polygon)
     run_all(params)
 

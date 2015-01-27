@@ -25,7 +25,6 @@ def create_plots(plot_scripts_folder, out_path, in_path, tmp_script, wrap):
     os.system(s)
 
     if wrap:
-        print in_path
         coords_file = '%s.coord' % in_path
     data = np.loadtxt(coords_file)
     data[:, 1] = unwrap_america(data[:, 1])
@@ -39,13 +38,11 @@ def run_eems(eems_exe, ini_file, n_demes, dry=False):
         tpl = eems_exe, ini_file, nd
         s += "%s --params %s_%s.ini &\n" % tpl
     s += 'wait'
-    print "EEMS-command:", s
     os.system(s)
 
 
 def write_all_files(args, meta_data, polygon):
     if args.diffs is None:
-        print 'de novo'
         create_eems_files(meta_data=meta_data, polygon=polygon,
                           bed2diffs=args.bed2diffs,
                           bedfile=TMP_PLINK,
@@ -54,7 +51,6 @@ def write_all_files(args, meta_data, polygon):
                           n_runs=args.n_runs,
                           **args.eems_args)
     else:
-        print 'filtering'
         create_eems_files(meta_data=meta_data, polygon=polygon,
                           bedfile=TMP_PLINK,
                           bed2diffs=args.bed2diffs,
@@ -181,7 +177,6 @@ def create_diffs_file(bedfile, bed2diffs, outname, nthreads=4):
     s = "%s --nthreads %d --bfile %s" % (tpl)
     s += " && mv %s.order %s.order " % (bedfile, outname)
     s += " && mv %s.diffs %s.diffs " % (bedfile, outname)
-    print s
     os.system(s)
 
 

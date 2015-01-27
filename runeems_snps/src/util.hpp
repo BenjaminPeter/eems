@@ -61,6 +61,7 @@ public:
   double dfmin, dfmax, qVoronoiPr;
   int numMCMCIter, numBurnIter, numThinIter;
   int nDemes, nIndiv, nSites, negBiSize;
+  int numOutputIter, saveMatrices;
 };
 
 void get_boost_version(ostream& out);
