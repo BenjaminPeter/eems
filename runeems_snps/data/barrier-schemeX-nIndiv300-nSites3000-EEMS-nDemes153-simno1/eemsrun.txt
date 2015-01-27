@@ -25,13 +25,13 @@ Input parameter values:
       mrateMuProposalS2 = 0.001000
 
 Acceptance proportions:
-	(23843/96107) = 24.81% for type 0 (qEffcts)
-	(12628/95802) = 13.18% for type 1 (qVoronoi)
-	(8875/95820) = 9.26% for type 2 (qBirthDeath)
-	(535489/1823893) = 29.36% for type 3 (mEffcts)
-	(508354/1920000) = 26.48% for type 4 (mrateMu)
-	(147503/1824198) = 8.09% for type 5 (mVoronoi)
-	(147503/1824180) = 8.09% for type 6 (mBirthDeath)
+	(24991/100149) = 24.95% for type 0 (qEffcts)
+	(13192/99742) = 13.23% for type 1 (qVoronoi)
+	(9292/99743) = 9.32% for type 2 (qBirthDeath)
+	(554948/1899851) = 29.21% for type 3 (mEffcts)
+	(528282/2000000) = 26.41% for type 4 (mrateMu)
+	(152114/1900258) = 8.00% for type 5 (mVoronoi)
+	(151919/1900257) = 7.99% for type 6 (mBirthDeath)
 
-Final log prior: 56.35
-Final log llike: 187385.46
+Final log prior: 53.36
+Final log llike: 187377.22
