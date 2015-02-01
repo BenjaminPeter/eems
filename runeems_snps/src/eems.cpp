@@ -638,6 +638,7 @@ void EEMS::save_matrices( ) const{
 
   // create the entire n by n fitted distance matrix
   
+  /*
   MatrixXd B = nowBinv.inverse();
   MatrixXd Delta = J * B * J.transpose();
   MatrixXd Ones = MatrixXd::Ones(1,n);
@@ -646,8 +647,8 @@ void EEMS::save_matrices( ) const{
   VectorXd Jw = J * (nowq*qconst);
   MatrixXd Diagonal = Jw.asDiagonal();
   Delta -= Diagonal;
+  */
   
-/*
   VectorXi mColors, qColors;
   graph.index_closest_to_deme(mSeeds,mColors);
   graph.index_closest_to_deme(qSeeds,qColors);
@@ -665,7 +666,6 @@ void EEMS::save_matrices( ) const{
     M(alpha,beta) = 0.5 * pow(10.0,log10m1) + 0.5 * pow(10.0,log10m2);
   }
   MatrixXd Delta = expected_dissimilarities(J, (M + M.transpose()) * Binvconst, q * qconst);
-  */
 
   ofstream out;
   out.open((params.mcmcpath + "/Delta.txt").c_str(),ofstream::out |
