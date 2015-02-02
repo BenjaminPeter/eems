@@ -160,7 +160,7 @@ def get_region_polygon(region, map_file='', rbuffer=1, wrap=True):
         return None
 
     countries = load_countries(map_file, wrap_americas=wrap)
-    print 'loaded countries'
+    print 'loaded countries', region
     eems_region = countries[region]
     polygon = eems_region.get_boundary_polygon(min_area=0.9,
                                                buffer_lvl=rbuffer,

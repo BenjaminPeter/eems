@@ -151,6 +151,21 @@ class Parameters(utils.parameters.Parameters):
                             help="""eems arg
                             (default: 0.01 )"""
                             )
+        parser.add_argument('--saveMatrices',
+                            default=1,
+                            help="""eems arg
+                            (default: 1 )"""
+                            )
+        parser.add_argument('--numOutputIter',
+                            default=10,
+                            help="""eems arg
+                            (default: 10 )"""
+                            )
+        parser.add_argument('--prev', '--prevpath',
+                            default='',
+                            help="""eems arg
+                            (default: '' )"""
+                            )
 
     @staticmethod
     def create_parser_map(parser):
@@ -417,6 +432,9 @@ class Parameters(utils.parameters.Parameters):
         p.eems_args['qEffctProposalS2'] = p.qEffctProposalS2
         p.eems_args['mEffctProposalS2'] = p.mEffctProposalS2
         p.eems_args['mrateMuProposalS2'] = p.mrateMuProposalS2
+        p.eems_args['saveMatrices'] = p.saveMatrices
+        p.eems_args['numOutputIter'] = p.numOutputIter
+        p.eems_args['prevpath'] = p.prev
 
         make_full_paths(p)
 

@@ -32,19 +32,19 @@ class CountryContainer(object):
         
         self.c.append(c)
 
-        self.countries[c.name] = c
-        self.countries[c.name_long] = c
-        self.countries[c.abbrev] = c
+        self.countries[c.name.lower()] = c
+        self.countries[c.name_long.lower()] = c
+        self.countries[c.abbrev.lower()] = c
 
         if c.homepart == 1.0:
-            self.countries[c.gu_a3] = c
-            self.countries[c.postal] = c
+            self.countries[c.gu_a3.lower()] = c
+            self.countries[c.postal.lower()] = c
     
-        self.regions[c.sovereignt].append(c)
-        self.regions[c.continent].append(c)
-        self.regions[c.region_un].append(c)
-        self.regions[c.subregion].append(c)
-        self.regions[c.region_wb].append(c)
+        self.regions[c.sovereignt.lower()].append(c)
+        self.regions[c.continent.lower()].append(c)
+        self.regions[c.region_un.lower()].append(c)
+        self.regions[c.subregion.lower()].append(c)
+        self.regions[c.region_wb.lower()].append(c)
 
         if c.continent not in ['Oceania', 'Antarctica']:
             self.regions['world'].append(c)
@@ -61,28 +61,34 @@ class CountryContainer(object):
         if type(i) is int or type(i) is slice:
             return self.c.__getitem__(i)
         if type(i) is str:
-            if i in self.regions:
+            if i.lower() in self.regions:
                 opt = CountryContainer()
-                opt.add_countries(self.regions[i])
+                opt.add_countries(self.regions[i.lower()])
                 return opt
-            if i in self.countries:
-                return self.countries[i]
+            if i.lower() in self.countries:
+                opt = CountryContainer()
+                opt.add_country(self.countries[i.lower()])
+                return opt
             raise IndexError()
 
         opt = CountryContainer()
         for j in i:
             if type(j) is list:
                 for k in j:
-                    if k in self.regions:
-                        opt.add_countries(self[k])
+                    if k.lower() in self.regions:
+                        opt.add_countries(self[k.lower()])
                     else:
-                        opt.add_country(self[k])
+                        opt.add_country(self[k.lower()])
             else:
-                if j in self.regions:
-                    opt.add_countries(self[j])
+                if j.lower() in self.regions:
+                    opt.add_countries(self[j.lower()])
                 else:
-                    opt.add_country(self[j])
+                    opt.add_country(self[j.lower()])
         return opt
+
+    def remove_northern_islands(self, limit=70):
+        for c in self:
+            c.remove_northern_islands(limit)
 
     def get_boundary_polygon(self, simplify_level=0.5, buffer_lvl=1,
                              min_area=0.95, return_type="array"):
@@ -345,8 +351,9 @@ def load_countries(s, wrap_americas=True):
     if wrap_americas:
         countries.wrap_americas()
 
-    russia = countries['Russia', 'Norway', 'Greenland']
+    russia = ['Russia', 'Norway', 'Greenland']
     for r in russia:
+        r = countries[r]
         r.remove_northern_islands(limit=70)
     return countries
 
