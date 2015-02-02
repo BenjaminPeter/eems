@@ -1,14 +1,14 @@
 require(snpStats) #for read.plnk function
 
-source("wishart.r")
+#source("wishart.r")
 
 
-project.folder = "/data/eems-project/human_origins/projects/europe/input/"
-delta.folder = "/data/eems-project/human_origins/projects/europe/output/300_2/"
+project.folder = "/data/eems-project/human_origins/projects/europe/input/europe"
+delta.folder = "/data/eems-project/human_origins/projects/europe/output/300_1/"
 
 
 
-total.nnsnp = 600000
+tot.n.snp = 600000
 
 
 get.snp.mat <- function( snp.id, data){
@@ -23,6 +23,10 @@ subset.plink = function(data, indiv){
     data$fam = data$fam[to.keep,]
     data$genotypes = data$genotypes[to.keep,]
     data
+}
+
+get.freq <- function(data){
+    maf.obs <- col.summary(data$genotypes)$MAF
 }
 
 subset.maf = function(data, maf = 0){
@@ -57,6 +61,7 @@ get.obs.matrices <- function(n.posterior.samples=10){
     deltas<- load.posterior(delta.folder, n.posterior.samples)
 }
 
+
 do.full.analysis <- function(max.n.snp=1, tot.n.snp=600000,
                              n.posterior.samples=10){
     indiv <- read.table(paste0(project.folder, "europe.order"))
@@ -68,7 +73,7 @@ do.full.analysis <- function(max.n.snp=1, tot.n.snp=600000,
     df <- thetas[,2]
     data <- load.snp.data(indiv=indiv)
 
-    deltas <- get.obs.matrices(n.posterior.samples)
+    deltas <- load.posterior(delta.folder, n.posterior.samples)
 
 
     diffs.one <-get.diff.matrices(diffs, data, tot.n.snp, max.n.snp)
@@ -103,38 +108,114 @@ L <- function(x){
     cbind(-1, diag(rep(1, x-1)))
 }
 
+log.det <- function(M){
+    c.M <- chol(M)
+    q <- 2 * sum(log(diag(c.M)))
+    return(q)
+}
+
+get.df.rm <- function(df, mode,...){
+    if( mode == 1){
+        return(df)
+    } else if(mode ==2) {
+        return(df-1)
+    } else if(mode ==3)  {
+        l <- list(...)
+
+        return(df*(1-1/tot.n.snp))
+    }
+
+}
+
+load.files <- function(bed.file='chr2', project.folder,
+                       delta.folder,
+                       tot.n.snp = tot.n.snp, df.mode =1, ...){
+
+    indiv <- read.table(paste0(project.folder, ".order"))
+    diffs <- read.table(paste0(project.folder, ".diffs"))
+    diffs <- as.matrix(diffs)
+
+    thetas <- read.table(paste0(delta.folder, "mcmcthetas.txt"))
+    ll <- read.table(paste0(delta.folder, "mcmcpilogl.txt"))[,2]
+    sigma2 <- thetas[,1]
+    df <- thetas[,2]
+    df.rm <- get.df.rm(df, df.mode, tot.n.snp=tot.n.snp)
+    
+
+    data <- load.snp.data(bed.file=bed.file, indiv=indiv, ...)
+    print("loaded data")
+
+    return(list("data"=data,
+                "diffs"=diffs,
+                "sigma2"=sigma2,
+                "df"=df,
+                "df.rm"=df.rm,
+                "data"=data,
+                "ll"=ll))
+
+}
+
+do.full.analysis <- function(bed.file='chr2', project.folder, 
+                             delta.folder,
+                             n.posterior.samples=100,
+                             max.n.snp=200, tot.n.snp=600000,
+                             df.mode=1, ...){
+
+    f <- load.files(bed.file, project.folder, delta.folder,
+                   tot.n.snp, df.mode)
+
+    deltas <- load.posterior(delta.folder, n.posterior.samples)
+    print("loaded posterior")
+
+    precomputes <- precompute(f$diffs, deltas)
+    print("precomputed matrices")
+
+    max.n.snp <- min(max.n.snp, dim(f$data$genotypes)[2])
+    fn <- function(id,...){
+        snp <- get.snp.mat(id, f$data)
+        if(id %% 100==1) print(id)
+        lllr.wishart(snp, ...)
+    }
+
+    lllr <- sapply(1:max.n.snp, fn, diffs=f$diffs, df=f$df, df.rm=f$df.rm,
+                   sigma2=f$sigma2, precomputes=precomputes,
+                   n.snps=tot.n.snp)
+    return(lllr)
+
+}
+
 
 precompute <- function(diffs, deltas){
     mat <- list()
     LD <- L(diffs)
     LDt <- t(LD)
-    deltas = lapply(deltas, function(Delta)-LD %*% Delta %*% LDt)
-    diffs = - LD %*% diffs %*% LDt
-    mat$ldet.diffs <- log(det(diffs))
-    mat$inv.diffs <- solve(diffs)
+    deltasl = lapply(deltas, function(Delta)-LD %*% Delta %*% LDt)
+    diffsl = - LD %*% diffs %*% LDt
+    mat$ldet.diffs <- log.det(diffsl)
+    mat$inv.diffs <- solve(diffsl)
 
-    mat$det.deltas <- lapply(deltas, det)
-    mat$ldet.deltas <- lapply(mat$det.deltas, log)
+    mat$ldet.deltas <- sapply(deltasl, log.det)
 
-    mat$inv.deltas <- lapply(deltas, solve)
+    mat$inv.deltas <- lapply(deltasl, solve)
 
-    mat$tr.invd.diffs <- lapply(mat$inv.deltas, trace.product, diffs)
-    mat$ltr.invd.diffs <- lapply(mat$tr.invd.diffs, log)
+    mat$tr.invd.diffs <- sapply(mat$inv.deltas, trace.product, diffsl)
     mat
 }
 LDL <- function(d2){
     d2 <- -L(d2) %*% ( d2) %*% t(L(d2))
 }
 
-lllr.wishart <- function(snp, diffs, df, df.rm, precomputes,
+lllr.wishart <- function(snp, diffs, df, df.rm, sigma2,
+                         precomputes,
                          n.snps=600000){
     mat <- precomputes
     p <- dim(mat$inv.diffs)[1]
-    delta <- df - df.rm
+    delta.df <- df - df.rm
 
     snpn <- snp/n.snps
     d2 <- LDL(diffs-snpn)
-    log.det.d2 <- log(det(d2))
+    #d2 <- as.matrix(forceSymmetric(d2))
+    log.det.d2 <- log.det(d2)
 
     gamma.ratio <- function(df, df.rm){
         l <- length(df)
@@ -145,35 +226,63 @@ lllr.wishart <- function(snp, diffs, df, df.rm, precomputes,
         }
         res
     }
-    gammas <- mapply(gamma.ratio, df, df.rm)
+    gammas <- mapply(gamma.ratio, df, df.rm) #gamma term
 
-    log.c <- log(2) * delta / 2
-    log.c <- log.c + log(df) * (-p) * df / 2
-    log.c <- log.c - log(df.rm) * (-p) * df.rm / 2
+    log.c <- log(2) * delta.df / 2 * p #2^(.) term
 
-    lllratio <- gammas + log.c 
+    # constant term from detSigma
+    log.c <- log.c + p/2 * ( delta.df*log(sigma2) - 
+                            df*log(df) + df.rm*log(df.rm)) 
+
+    lllratio <- gammas + log.c  
     
-    lllratio <- lllratio - mats$ldet.diffs * (p - df - 1) /2 
-    lllratio <- lllratio + log.det.d2 * (p - df.rm - 1) /2 
 
-    add.det.deltas <- function( lllr, dets){ lllr - delta/2 * dets}
-    lllratio <- add.det.deltas( lllratio, unlist(mat$ldet.deltas))
+    #det data term
+    det.data.1 <- log.det.d2 * (df.rm - p - 1) /2 
+    det.data <- mat$ldet.diffs * (df - p - 1) /2 
+    lllratio <- lllratio + det.data.1 - det.data
 
-    add.traces <- function( lllr, tr, df){
-        lllr - 1/2/df * tr
-    }
-    lllratio <- add.traces( lllratio, unlist(mat$ltr.invd.diffs), df)
+    # detSigma term
+    det.sigma <- delta.df/2 * mat$ldet.deltas
+    lllratio <- lllratio + det.sigma
 
-
-    traces <- sapply(mat$inv.deltas, trace.product, LDL(snpn))
-    add.traces2 <- function( lllr, tr1, tr2, df){
-        lllr - 1/2/df * (tr1 + tr2)
-    }
-    lllratio <- add.traces2( lllratio, unlist(mat$ltr.invd.diffs), 
-                       log(traces), df.rm)
-
+    #traces term
+    obs.traces <- mat$tr.invd.diffs * df.rm/sigma2 /2 
+    snp.traces <- sapply(mat$inv.deltas, trace.product, LDL(diffs-snpn))
+    snp.traces <- snp.traces  * df/ sigma2 /2 
+    lllratio <- lllratio - snp.traces + obs.traces
+    #snp.traces <- sapply(mat$inv.deltas, trace.product, LDL(snpn))
+    #lllratio <- lllratio + df.rm/df * (1 - snp.traces/obs.traces)
 
     return(lllratio)
+}
+
+dWishart2 <- function(mat, df, sigma2, snp=NULL){
+    p <- nrow(mat$inv.diffs)
+    if(is.null(snp)){
+        ldX <- mat$ldet.diffs
+        tr.Sigma.inv.X <- mat$tr.invd.diffs[[1]] * df /sigma2
+    } else{
+        X <- LDL(diffs - snp/600000)
+        ldX <- log.det(X)
+        tr.Sigma.inv.X <- trace.product(mat$inv.deltas[[1]], X) * df /sigma2
+    }
+    ldS <- mat$ldet.deltas[1] + log(sigma2/df) * p
+
+    ll <- -(p+1) * ldX -
+        tr.Sigma.inv.X -
+        df*(ldS - ldX) -
+        df * p * log(2)  
+    det.data <- (df-p-1) *ldX
+    print(det.data/2)
+    ll <- (df-p-1) * ldX -
+        tr.Sigma.inv.X -
+        df*ldS -
+        df * p * log(2)  
+    ll <- ll/2
+    ll <- ll - multivariate_gamma_function(df/2, p)
+    ll
+
 }
 
 
@@ -186,4 +295,21 @@ trace.product<- function(m1, m2) sum(m1 * t(m2))
 
 harmonic.mean <- function(a){
     1/mean(1/a)
+}
+
+load.posterior = function(eems.folder, max.matrices=NULL){
+    d <- read.table(paste0(eems.folder,"Delta.txt"), nrow=1)
+    w <- ncol(d)
+
+    if( is.null(max.matrices)){
+	d <- read.table(paste0(eems.folder,"Delta.txt"))
+	max.matrices = nrow(d) / w
+    } else {
+	d <- read.table(paste0(eems.folder,"Delta.txt"), 
+			nrow=w * max.matrices)
+    }
+
+    f = function(i)as.matrix(d[((i-1)*w+1):(i*w),])
+    Delta = lapply(1:max.matrices, f)
+    return(Delta)
 }
