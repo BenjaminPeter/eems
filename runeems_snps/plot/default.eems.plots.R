@@ -15,10 +15,16 @@ library(deldir) ## the deldir function calculates Voronoi tessellation
 ## Also see http://geog.uoregon.edu/datagraphics/color_scales.htm
 
 ## The default Dark Orange to Blue color scheme:
-default.eems.colors <- function( ) {
-    eems.colors <- c("#994000","#CC5800","#FF8F33","#FFAD66","#FFCA99","#FFE6CC", ## orange sequence
-                     "#FFFFFF",                                                   ## white
-                     "#CCFDFF","#99F8FF","#66F0FF","#33E4FF","#00AACC","#007A99") ## blue sequence
+default.eems.colors <- function(par='m' ) {
+    if(par == 'q'){
+	eems.colors <- c("#994000","#CC5800","#FF8F33","#FFAD66","#FFCA99","#FFE6CC", ## orange sequence
+			 "#bbbbbb",                                                   ## white
+			 "#BBFFBB","#86FF86","#50FF50","#00BB00","#008600","#005000") ## green sequence
+    } else {
+	eems.colors <- c("#994000","#CC5800","#FF8F33","#FFAD66","#FFCA99","#FFE6CC", ## orange sequence
+			 "#bbbbbb",                                                   ## white
+			 "#CCFDFF","#99F8FF","#66F0FF","#33E4FF","#00AACC","#007A99") ## blue sequence
+    }
     return (eems.colors)
 }
 default.var.colors <- function( ) {
@@ -27,15 +33,15 @@ default.var.colors <- function( ) {
     return (var.colors)
 }
 ## Default color of the geographic map
-default.map.color <- function( ) { return ("gray60") }
+default.map.color <- function( ) { return ("gray20") }
 ## Default color of the EEMS population grid
-default.grid.color <- function( ) { return ("gray80") }
+default.grid.color <- function( ) { return ("gray60") }
 
 ###### Define routines to normalize the rates before plotting them ######
 
 mrates.levels <- function(Zvals) {
-    minZ <- min(Zvals)
-    maxZ <- max(Zvals)
+    minZ <- min(Zvals, na.rm=T)
+    maxZ <- max(Zvals, na.rm=T)
     eems.colors <- default.eems.colors()
     numlevels <- length(eems.colors)
     ## First check whether the Z values are in the range (-2.5,+2.5), since
@@ -55,9 +61,9 @@ mrates.levels <- function(Zvals) {
     return(eems.levels)
 }
 qrates.levels <- function(Zvals) {
-    minZ <- min(Zvals)
-    maxZ <- max(Zvals)
-    eems.colors <- default.eems.colors()
+    minZ <- min(Zvals, na.rm=T)
+    maxZ <- max(Zvals, na.rm=T)
+    eems.colors <- default.eems.colors('q')
     numlevels <- length(eems.colors)
     maxZ2 <- max(maxZ,-minZ)
     maxZ2 <- ceiling(maxZ2*1000)/1000
@@ -97,11 +103,18 @@ read.dimns <- function(mcmcpath,longlat,nxmrks=NULL,nymrks=NULL) {
     xmrks <- seq(xmin,xmax,length=nxmrks)
     ymrks <- seq(ymin,ymax,length=nymrks)
     marks <- cbind(rep(xmrks,times=nymrks),rep(ymrks,each=nxmrks))
+    ## remove points outside of boundary polygon
+    require(SDMTools)
+    pip <- pnt.in.poly(marks, outer)[,3]
+    filter <- pip == 1
+
+
     ## Experimenting with the pixmap package to create pixel maps of estimated rates
     marks.pixmap.order <- cbind(rep(xmrks,each=nymrks),rep(rev(ymrks),times=nxmrks))
     return(list(nxmrks=nxmrks,xmrks=xmrks,xrange=c(xmin,xmax),xspan=(xmax-xmin),
                 nymrks=nymrks,ymrks=ymrks,yrange=c(ymin,ymax),yspan=(ymax-ymin),
-                marks=marks,marks.pixmap.order=marks.pixmap.order))
+                marks=marks,marks.pixmap.order=marks.pixmap.order,
+		filter=filter))
 }
 read.edges <- function(mcmcpath) {
     edges <- read.table(paste(mcmcpath,'/edges.txt',sep=''),colClasses=numeric())
@@ -155,11 +168,12 @@ compute.contour.vals <- function(dimns,seeds,rates,use.weighted.mean=TRUE) {
     ## and 'rates' stores the log10-transformed rates of the tiles.
     ## If there are C seeds in the partition, then 'seeds' is a matrix
     ## with C rows and 2 columns and 'rates' is a vector with C elements
-    distances <- rdist(dimns$marks,seeds)
+    distances <- rdist(dimns$marks[dimns$filter,],seeds)
     closest <- apply(distances,1,which.min)
     if (use.weighted.mean) {
-        zvals <- matrix(rates[closest],dimns$nxmrks,dimns$nymrks,byrow=FALSE)
-        zvals <- zvals - mean(zvals)
+        zvals <- matrix(NA,dimns$nxmrks,dimns$nymrks)
+        zvals[dimns$filter] <- rates[closest]
+        zvals <- zvals - mean(zvals, na.rm=T)
     } else {
         rates <- rates - mean(rates)
         zvals <- matrix(rates[closest],dimns$nxmrks,dimns$nymrks,byrow=FALSE)
@@ -173,6 +187,7 @@ standardize.rates <- function(mcmcpath,dimns,longlat,is.mrates) {
     xseed <- voronoi$xseed
     yseed <- voronoi$yseed
     Zvals <- matrix(0,dimns$nxmrks,dimns$nymrks)
+    Zvals[!dimns$filter] <- NA
     niter <- length(tiles)
     count <- 0
     for (i in 1:niter) {
@@ -242,17 +257,18 @@ filled.countour.axes <- function(mcmcpath,longlat,plot.params) {
     }
 }
 one.eems.contour <- function(mcmcpath,dimns,Zmean,Zvar,longlat,plot.params,is.mrates) {
-    eems.colors <- default.eems.colors( )
     if (is.mrates) {
         eems.levels <- mrates.levels(Zmean)
         main.title <- "Effective migration rates m : posterior mean"
         var.title <- "Effective migration rates m : posterior variance"
         key.title <- expression(paste("e"["m"],sep=""))
+	eems.colors <- default.eems.colors( )
     } else {
         eems.levels <- qrates.levels(Zmean)
         main.title <- "Effective diversity rates q : posterior mean"
         var.title <- "Effective diversity rates q : posterior variance"
         key.title <- expression(paste("e"["q"],sep=""))
+	eems.colors <- default.eems.colors("q" )
     }
     par(font.main=1,col="white",xpd=TRUE)
     filled.contour(dimns$xmrks,dimns$ymrks,Zmean,asp=1,
@@ -262,8 +278,8 @@ one.eems.contour <- function(mcmcpath,dimns,Zmean,Zvar,longlat,plot.params,is.mr
                    key.title = mtext(key.title,side=3,cex=1.5,col="black"),
                    plot.axes = filled.countour.axes(mcmcpath,longlat,plot.params)
                    )
-    min.Zvar <- min(Zvar)
-    max.Zvar <- max(Zvar)
+    min.Zvar <- min(Zvar, na.rm=T)
+    max.Zvar <- max(Zvar, na.rm=T)
     Zvar <- (Zvar - min.Zvar)/(max.Zvar - min.Zvar)
     var.colors <- default.var.colors()
     var.levels <- seq(from=0,to=1,length.out=length(var.colors))
@@ -308,6 +324,7 @@ average.eems.contours <- function(mcmcpath,dimns,longlat,plot.params,is.mrates) 
         Zvar <- Zvar + rslt$Zvar
     }
     Zvar <- Zvar/(niter-1)
+    
     one.eems.contour(mcmcpath[1],dimns,Zmean,Zvar,longlat,plot.params,is.mrates)
 }
 ## If there are multiple runs, pick the first one and create at most max.niter Voronoi diagrams
@@ -514,6 +531,35 @@ save.graphics <- function(plotpath,plot.height,plot.width,res=600,out.png=TRUE) 
               height=plot.height,width=plot.width,onefile=FALSE)
     }
 }
+
+
+## function to find run with the highest max lik
+find.max.likelihood <- function(mcmcpath){
+    mcmcpath1 <- character()
+    for (path in mcmcpath) {
+        if (file.exists(paste(path,'/ipmap.txt',sep=''))&&
+            file.exists(paste(path,'/demes.txt',sep=''))&&
+            file.exists(paste(path,'/edges.txt',sep=''))) {
+            mcmcpath1 <- c(mcmcpath1,path)
+        } else {
+            print('The following EEMS output not found:')
+            print(path)
+        }
+    }
+    mcmcpath <- mcmcpath1
+
+    llfile.names <- sprintf("%s/mcmcpilogl.txt", mcmcpath)
+    lls <- sapply(llfile.names, function(x) read.table(x)[,2])
+    max.lls <- apply(lls, 2, max)
+    
+    return(mcmcpath[ max.lls == max(max.lls)])
+
+}
+eems.plots.max <- function(mcmcpath, plotpath, ...){
+    mcmcpath <- find.max.likelihood(mcmcpath)
+    plotpath <- sprintf("%s-max", plotpath)
+    return(eems.plots(mcmcpath=mcmcpath, plotpath=plotpath, ...))
+}
 ####################################################################################
 ## eems.plots takes three required arguments:
 ##   mcmcpath: one or several output directories (for the same dataset)
@@ -569,7 +615,13 @@ eems.plots <- function(mcmcpath,plotpath,longlat,plot.width=0,plot.height=0,out.
     print(mcmcpath)
     
     dimns <- read.dimns(mcmcpath[1],longlat)
-    if ((plot.height<=0)||(plot.width<=0)) {
+    if ((plot.height > 0)&&(plot.width <= 0)) {
+	ratio = dimns$yspan / dimns$xspan
+        plot.width <- plot.height / ratio 
+    } else if ((plot.height <= 0)&&(plot.width > 0)) {
+	ratio = dimns$yspan / dimns$xspan
+        plot.height <- ratio * plot.width
+    } else if ((plot.height<=0)||(plot.width<=0)) {
         plot.height <- 1.1*dimns$yspan
         plot.width <- 1.25*dimns$xspan
     }

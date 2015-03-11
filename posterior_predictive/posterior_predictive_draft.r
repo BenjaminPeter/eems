@@ -237,7 +237,8 @@ load.files.multiple <-function(bed.file='chr2', folder,
 do.folder.analysis <- function(bed.file='chr2', folder, 
                              n.posterior.samples=500,
                              max.n.snp=200, tot.n.snp=600000,
-                             df.mode=3, write.freq=100,...){
+                             df.mode=3, write.freq=100,
+			     normalize=F,...){
     
     f <- load.files.multiple(bed.file, folder,
                    tot.n.snp, df.mode, n.posterior.samples, ...)
@@ -253,24 +254,33 @@ do.folder.analysis <- function(bed.file='chr2', folder,
     print(c("max.n.snp is", max.n.snp))
 
 
-    out.name <- sprintf("%s/out_%s.all1.txt", folder, bed)
-    out.name.probs <- sprintf("%s/out_%s.probs1.txt", folder, bed)
+    if(normalize){
+	    out.name <- sprintf("%s/out_%s.alln.txt", folder, bed)
+	    out.name.probs <- sprintf("%s/out_%s.probsn.txt", folder, bed)
+    } else {
+	    out.name <- sprintf("%s/out_%s.all1.txt", folder, bed)
+	    out.name.probs <- sprintf("%s/out_%s.probs1.txt", folder, bed)
+    }
+
     print(c("out names are", out.name, out.name.probs))
 
     opt <- c()
     opt.meta <- c()
     append <- F
     for(i in 1:max.n.snp){
-        lllr <- lllr3(i, f$data, df=f$df, 
-                   sigma2=f$sigma2, precomputes=precomputes)
+	snp <- get.snp.mat(i, f$data)   
+        lllr <- lllr.wishart2(snp, df=f$df, sigma2=f$sigma2,
+		      precomputes=precomputes,
+		      normalize=normalize)
         opt <- rbind(opt, lllr)
         opt.meta <- rbind(opt.meta, 
-                          c(freqs[i], get.snp.meta(i, f$data)))
+                          c(freqs[i], get.snp.meta(i, f$data), mean(snp)))
         if( i %% write.freq == 0 || i == max.n.snp){
             print(i)
 
             probs <- apply(exp(opt), 1, harmonic.mean)
             probs <- cbind(probs, rowMeans(exp(opt)))
+            probs <- cbind(probs, rowSums(opt))
             probs <- cbind(opt.meta, probs)
 
             write.table(probs, out.name.probs, quote=F, col.names=F, 
@@ -287,6 +297,7 @@ do.folder.analysis <- function(bed.file='chr2', folder,
         }
     }
     return(list(opt, opt.meta))
+    u
 }
 
 do.full.analysis <- function(bed.file='chr2', project.folder, 
@@ -409,12 +420,22 @@ lllr.wishart2 <- function(snp, df, sigma2,
     p <- mat$p
 
     if(normalize){
-        target <- mean(precomputes$diffs)
-        x1 <- target * 1/n.snps
-        x2 <- target - x1
-        m1.norm <- mat$diffs * x2 / target
-        snp.norm <- snp / mean(snp) * x1
-        d2 <- LDL(m1.norm+snp.norm)
+        if(normalize==1){
+            snp.norm <- snp / mean(snp) 
+            target <- mean(precomputes$diffs)
+            m1.norm <- precomputes$diffs / mean(precomputes$diffs)
+            d2 <- (n.snps / (n.snps -1) ) * m1.norm - (1 / (n.snps - 1)) *snp.norm
+            d2 <- d2 * target
+
+            d2 <- LDL(d2)
+            d2 <- forceSymmetric(d2)
+        } else if(normalize==2){
+            snp.norm <- snp - mean(snp) 
+            d2 <- precomputes$diffs - (1 / (n.snps )) *snp.norm
+            d2 <- LDL(d2)
+            d2 <- forceSymmetric(d2)
+        }
+
     }else{
         snpn <- snp/n.snps
         lsnpn <- LDL(snpn)
@@ -506,10 +527,11 @@ if(length(args)>1){
     bed <- args[1]
     folder <- args[2]
     n.posterior.samples <- as.numeric(args[3])
+    normalize <- T
 
    fff <-do.folder.analysis(bed=args[1], folder=args[2],
                          max.n.snp=100000,
-                         n.posterior.samples=n.posterior.samples) 
+                         n.posterior.samples=n.posterior.samples, min.maf=0.1, normalize=normalize) 
 
    out.name <- sprintf("%s/out_%s.all.txt", folder, bed)
    write.table(f, out.name, quote=F, col.names=F, row.names=F)
