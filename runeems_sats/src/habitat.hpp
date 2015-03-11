@@ -7,6 +7,9 @@
 #include <boost/geometry/geometries/ring.hpp>
 #include <boost/geometry/algorithms/covered_by.hpp>
 
+#ifndef HABITAT_H
+#define HABITAT_H
+
 typedef boost::geometry::model::point<double,2,boost::geometry::cs::cartesian> Point;
 typedef boost::geometry::model::ring<Point> Ring;
 
@@ -34,8 +37,8 @@ public:
   Habitat( );
   ~Habitat( );
 
-  void initialize(const string &datapath);
-  bool dlmwrite(const string &mcmcpath) const;
+  void generate_outer(const string &datapath);
+  bool dlmwrite_outer(const string &mcmcpath) const;
   bool in_point(const double x, const double y) const;
 
   double get_area( ) const;
@@ -53,3 +56,5 @@ private:
   double ymin, ymax, yspan;
   
 };
+
+#endif

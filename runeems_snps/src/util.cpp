@@ -1,6 +1,8 @@
 
 #include "util.hpp"
 
+extern string dist_metric;
+
 Params::Params( ) { }
 Params::~Params( ) { }
 Params::Params(const string &params_file, const long seed_from_command_line) {
@@ -8,13 +10,15 @@ Params::Params(const string &params_file, const long seed_from_command_line) {
     po::options_description eems_options("EEMS options from parameter file");
     eems_options.add_options()
       ("seed", po::value<long>(&seed)->default_value(seed_from_command_line), "Random seed")
-      ("datapath", po::value<string>(&datapath)->required(), "Datapath")
-      ("mcmcpath", po::value<string>(&mcmcpath)->required(), "MCMCpath")
-      ("prevpath", po::value<string>(&prevpath)->default_value(""), "Previous MCMCpath")
-      ("nDemes", po::value<int>(&nDemes)->required(), "nDemes")
+      ("datapath", po::value<string>(&datapath)->required(), "Path to coord/diffs/outer files")
+      ("mcmcpath", po::value<string>(&mcmcpath)->required(), "Path to output directory")
+      ("prevpath", po::value<string>(&prevpath)->default_value(""), "Path to previous output directory")
+      ("gridpath", po::value<string>(&gridpath)->default_value(""), "Path to demes/edges/ipmap files")
       ("nIndiv", po::value<int>(&nIndiv)->required(), "nIndiv")
       ("nSites", po::value<int>(&nSites)->required(), "nSites")
+      ("nDemes", po::value<int>(&nDemes)->default_value(1), "nDemes")
       ("diploid", po::value<bool>(&diploid)->default_value(true), "diploid")
+      ("distance", po::value<string>(&distance)->default_value("euclidean"), "distance")
       ("numMCMCIter", po::value<int>(&numMCMCIter)->default_value(1), "numMCMCIter")
       ("numBurnIter", po::value<int>(&numBurnIter)->default_value(0), "numBurnIter")
       ("numThinIter", po::value<int>(&numThinIter)->default_value(0), "numThinIter")
@@ -61,6 +65,8 @@ ostream& operator<<(ostream& out, const Params& params) {
   out << "               datapath = " << params.datapath << endl
       << "               mcmcpath = " << params.mcmcpath << endl
       << "               prevpath = " << params.prevpath << endl
+      << "               gridpath = " << params.gridpath << endl    
+      << "               distance = " << params.distance << endl
       << "                 nIndiv = " << params.nIndiv << endl
       << "                 nSites = " << params.nSites << endl
       << "                 nDemes = " << params.nDemes << endl
@@ -87,7 +93,8 @@ ostream& operator<<(ostream& out, const Params& params) {
 }
 bool Params::check_input_params( ) const {
   bool error = false;
-  boost::filesystem::path dir(mcmcpath.c_str());
+  boost::filesystem::path mcmcdir(mcmcpath.c_str());
+  boost::filesystem::path prevdir(prevpath.c_str());
   cerr << "Using Boost " << BOOST_LIB_VERSION
        << " and Eigen " << EIGEN_WORLD_VERSION << "." << EIGEN_MAJOR_VERSION << "." << EIGEN_MINOR_VERSION << endl
        << "  EEMS was tested with Boost 1_57 and Eigen 3.2.4" << endl << endl;
@@ -95,14 +102,31 @@ bool Params::check_input_params( ) const {
     cerr << "  Infinity not supported on this platform" << endl;
     error = true;
   }
-  if (!boost::filesystem::create_directory(dir) && !exists(dir)) {
+  if (!boost::filesystem::create_directory(mcmcdir) && !exists(mcmcdir)) {
     cerr << "  Failed to create output directory " << mcmcpath << endl;
+    error = true;
+  }
+  if (!(!distance.compare("euclidean") || !distance.compare("greatcirc"))) {
+    cerr << "  Choose either 'euclidean' or 'greatcirc' distance metric" << endl;
     error = true;
   }
   if (!boost::filesystem::exists(datapath + ".coord") ||
       !boost::filesystem::exists(datapath + ".diffs") ||
       !boost::filesystem::exists(datapath + ".outer")) {
     cerr << "  Failed to find input files " << datapath << ".coord/diffs/outer" << endl;
+    error = true;
+  }
+  if (!gridpath.empty() && 
+      (!boost::filesystem::exists(gridpath + ".demes") ||
+       !boost::filesystem::exists(gridpath + ".edges") ||
+       !boost::filesystem::exists(gridpath + ".ipmap"))) {
+    // Path to input population grid is specified
+    // but one of the required files is missing
+    cerr << "  Failed to find graph files " << gridpath << ".demes/edges/ipmap" << endl;
+    error = true;
+  }
+  if (!prevpath.empty() && !exists(prevdir)) {
+    cerr << "  Failed to find directory " << prevpath << " to previous EEMS output" << endl;
     error = true;
   }
   if (!(mSeedsProposalS2>0) || !(mEffctProposalS2>0) || !(dfProposalS2>0) ||
@@ -178,12 +202,26 @@ bool isdistmat(const MatrixXd &A) {
 double logdet(const MatrixXd &A) {
   return (A.selfadjointView<Lower>().ldlt().vectorD().array().log().sum());
 }
+double pseudologdet(const MatrixXd &A, const int rank) {
+  SelfAdjointEigenSolver<MatrixXd> x(A);
+  return (x.eigenvalues().reverse().array().head(rank).log().sum());
+}
 double wishpdfln(const MatrixXd &X, const MatrixXd &Sigma, const double df) {
   double ldX = logdet(X);
   double ldS = logdet(Sigma);
   int n = X.rows();
   return (0.5*(-df*ldS - Sigma.selfadjointView<Lower>().llt().solve(X).trace() + 
 	       (df-n-1.0)*ldX - df*n*log_2) - mvgammaln(0.5*df,n));
+}
+// Not a general pseudowishpdfln (because L*Diff*L' at a single locus has rank 1
+double pseudowishpdfln(const MatrixXd &X, const MatrixXd &Sigma, const int df) {
+  int rank = 1;
+  double ldX = pseudologdet(X,rank);
+  double ldS = logdet(Sigma);
+  int n = X.rows();
+  int q = (df<n) ? df : n;
+  return (0.5*(-df*ldS - Sigma.selfadjointView<Lower>().llt().solve(X).trace() +
+	       (df-n-1.0)*ldX - df*n*log_2 - df*(n-q)*log_pi) - mvgammaln(0.5*df,q));
 }
 double mvgammaln(const double a, const int p) {
   double val = 0.25*log_pi*p*(p-1);
@@ -193,17 +231,41 @@ double mvgammaln(const double a, const int p) {
   return (val);
 }
 /*
-  Compute pairwise distances between the rows of X and the rows of Y.
-  Currently the metric is (squared) Euclidean distance.
-  Taking the square root is not necessary because EEMS uses distances
-  to find closest points. For example,
+  Squared Euclidean distance: Taking the square root is not necessary
+  because EEMS uses the distances to find closest points. For example,
     pairwise_distance(X,Y).col(0).minCoeff( &closest )
   finds the row/point in X that is closest to the first row/point in Y
  */
-MatrixXd pairwise_distance(const MatrixXd &X, const MatrixXd &Y) {
+MatrixXd euclidean_dist(const MatrixXd &X, const MatrixXd &Y) {
   return (  X.rowwise().squaredNorm().eval().replicate(1,Y.rows())
-  	  + Y.rowwise().squaredNorm().eval().transpose().replicate(X.rows(),1)
-  	  - 2.0*X*Y.transpose() );
+	    + Y.rowwise().squaredNorm().eval().transpose().replicate(X.rows(),1)
+	    - 2.0*X*Y.transpose() );
+}
+/* Great circle distance, up to a constant of proportionality equal to 2*R
+   where R is the earth's radius
+ */
+MatrixXd greatcirc_dist(const MatrixXd &X, const MatrixXd &Y) {
+  int nr = X.rows();
+  int nc = Y.rows();
+  MatrixXd lon1 = X.col(0).replicate(1,nc) * pi_180;
+  MatrixXd lat1 = X.col(1).replicate(1,nc) * pi_180;
+  MatrixXd lon2 = Y.col(0).transpose().replicate(nr,1) * pi_180;
+  MatrixXd lat2 = Y.col(1).transpose().replicate(nr,1) * pi_180;
+  MatrixXd dlon = 0.5*(lon2 - lon1);
+  MatrixXd dlat = 0.5*(lat2 - lat1);
+  MatrixXd a = dlat.array().sin().square().matrix() +
+    (dlon.array().sin().square() * lat1.array().cos() * lat2.array().cos()).matrix();
+  MatrixXd c = (a.array()<1.0).select(a.array().sqrt(),MatrixXd::Ones(nr,nc)).array().asin();
+  return (c); // Instead of (2*R*c) where R = 6378137 is the Earth's radius.
+}
+// Compute pairwise distances between the rows of X and the rows of Y.
+// Choose either Euclidean or great circle distance
+MatrixXd pairwise_distance(const MatrixXd &X, const MatrixXd &Y) {
+  if (!dist_metric.compare("greatcirc")) {
+    return (greatcirc_dist(X,Y));
+  } else {
+    return (euclidean_dist(X,Y));
+  }
 }
 MatrixXd resistance_distance(const MatrixXd &M, const int o) {
   MatrixXd Hinv = - M; Hinv.diagonal() += M.rowwise().sum();
@@ -360,4 +422,28 @@ double dtrnormln(const double x, const double mu, const double sigma2, const dou
       - log(cdf(pnorm,bnd) - cdf(pnorm,-bnd));
   }
   return (pln);
+}
+VectorXd slice(const VectorXd &A, const VectorXi &I) {
+  int elems = I.size();
+  VectorXd B(elems);
+  assert(I.minCoeff() >= 0);
+  assert(I.maxCoeff() < A.size());
+  for ( int i = 0 ; i < elems ; i++ ) {
+    B(i) = A(I(i));
+  }
+  return (B);
+}
+MatrixXd slice(const MatrixXd &A, const VectorXi &R, const VectorXi &C) {
+  int rows = R.size();
+  int cols = C.size();
+  MatrixXd B(rows,cols);
+  assert(R.minCoeff() >= 0);
+  assert(C.minCoeff() >= 0);
+  assert(R.maxCoeff() < A.rows());
+  assert(C.maxCoeff() < A.cols());
+  for ( int i = 0 ; i < rows ; i++ ) {
+  for ( int j = 0 ; j< cols ; j++ ) {
+    B(i,j) = A(R(i),C(j));
+  } }
+  return (B);
 }

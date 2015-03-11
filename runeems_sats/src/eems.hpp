@@ -8,6 +8,8 @@
 
 #include <boost/filesystem.hpp>
 
+#ifndef EEMS_H
+#define EEMS_H
 
 struct Proposal {
   int type;
@@ -15,6 +17,7 @@ struct Proposal {
   int mTile;
   int newqtiles;
   int newmtiles;
+  double ratioln;
   double newqEffct;
   double newmEffct;
   double newqSeedx;
@@ -38,16 +41,19 @@ struct Proposal {
 class EEMS {
 public:
 
-  EEMS(const Params &params, const long seed);
+  EEMS(const Params &params);
   ~EEMS( );
 
-  void initialize(const MCMC &mcmc);
+  void initialize_state( );
+  void load_final_state( );
+  bool start_eems(const MCMC &mcmc);
   double eval_prior( );
   double test_prior( ) const;
   double eval_likelihood( );
   double test_likelihood( ) const;
   void calc_q(const VectorXi &qColors0, const VectorXd &qEffcts0, VectorXd &q0) const;
   void calc_B(const VectorXi &mColors0, const VectorXd &mEffcts0, const double mrateMu0, MatrixXd &B0) const;
+  MoveType choose_move_type( );
   double eval_proposal_qEffcts(Proposal &proposal) const;
   double eval_proposal_mEffcts(Proposal &proposal) const;
   double eval_proposal_mrateMu(Proposal &proposal) const;
@@ -57,29 +63,29 @@ public:
   double eval_birthdeath_mVoronoi(Proposal &proposal) const;
 
   // Gibbs updates:
-  void update_s2loc( );
+  void update_sigma2( );
   void update_hyperparams( );
   // Random-walk Metropolis-Hastings proposals:
-  void propose_qEffcts(Proposal &proposal, const MCMC &mcmc);
-  void propose_mEffcts(Proposal &proposal, const MCMC &mcmc);
+  void propose_qEffcts(Proposal &proposal);
+  void propose_mEffcts(Proposal &proposal);
   void propose_mrateMu(Proposal &proposal);
-  void move_qVoronoi(Proposal &proposal, const MCMC &mcmc);
-  void move_mVoronoi(Proposal &proposal, const MCMC &mcmc);
-  void birthdeath_qVoronoi(Proposal &proposal, const MCMC &mcmc);
-  void birthdeath_mVoronoi(Proposal &proposal, const MCMC &mcmc);
+  void move_qVoronoi(Proposal &proposal);
+  void move_mVoronoi(Proposal &proposal);
+  void birthdeath_qVoronoi(Proposal &proposal);
+  void birthdeath_mVoronoi(Proposal &proposal);
   bool accept_proposal(Proposal &proposal);
   ///////////////////////////////////////////
 
-  bool save_iteration(const int iter);
-  void report_iteration(const int iter) const;
+  void print_iteration(const MCMC &mcmc) const;
+  void save_iteration(const MCMC &mcmc);
   bool output_results(const MCMC &mcmc) const;
+  bool output_current_state() const;
   void check_ll_computation() const;
-  int num_qtiles( ) const;
-  int num_mtiles( ) const;
   string datapath() const;
   string mcmcpath() const;
-  double runif( );
-  
+  string prevpath() const;
+  string gridpath() const;
+
 private:
 
   Draw draw; // Random number generator
@@ -90,7 +96,7 @@ private:
   int mtiles, qtiles;
   MatrixXd mSeeds; VectorXd mEffcts;
   MatrixXd qSeeds; VectorXd qEffcts;
-  double qrateS2,mrateS2, mrateMu;
+  double qrateS2, mrateS2, mrateMu;
   double nowpi, nowll;
 
   // Diffs:
@@ -99,7 +105,7 @@ private:
   int n; // nIndiv
   int p; // nSites
   MatrixXd J;
-  VectorXd s2loc;
+  VectorXd sigma2;
   vector<MatrixXd> Diffs;
   vector<MatrixXd> L;
   vector<MatrixXd> Z;
@@ -119,7 +125,7 @@ private:
   VectorXd logn;
   VectorXd nmin1;
   void initialize_diffs();
-  void runif_habitat(MatrixXd &Seeds);
+  void randpoint_in_habitat(MatrixXd &Seeds);
   void rnorm_effects(const double HalfInterval, const double rateS2, VectorXd &Effcts);
   
   ///////////////////////////////////////////
@@ -132,7 +138,6 @@ private:
 
   // Variables to store the results in :
   // Fixed size:
-  int niters;
   MatrixXd mcmcmhyper;
   MatrixXd mcmcqhyper;
   MatrixXd mcmcthetas;
@@ -147,6 +152,8 @@ private:
   vector<double> mcmcwCoord;
   vector<double> mcmczCoord;
   
-  double EEMS_wishpdfln(const MatrixXd &B, const VectorXd &q, const VectorXd &s2loc, VectorXd &trDinvQxD) const;
+  double EEMS_wishpdfln(const MatrixXd &B, const VectorXd &q, const VectorXd &sigma2, VectorXd &trDinvQxD) const;
   
 };
+
+#endif

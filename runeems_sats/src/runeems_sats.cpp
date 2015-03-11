@@ -1,110 +1,115 @@
 
-#include "util.hpp"
 #include "eems.hpp"
-#include "mcmc.hpp"
 
+// The distance metric is a global variable, so that
+// the pairwise_distance function can see it
+// Choose 'euclidean' (the default) or 'greatcirc' (great circle distance)
+string dist_metric;
 
 int main(int argc, char** argv)
 {
+  try {
+    
+    long seed_from_command_line = 1L;
+    string params_file; bool error;
+    
+    po::options_description options("EEMS options from command line");
+    po::variables_map vm;
+    options.add_options()
+      ("help", "Produce this help message")
+      ("seed", po::value<long>(&seed_from_command_line)->default_value(time(NULL)), "Set the random seed")
+      ("params", po::value<string>(&params_file)->required(), "Specify input parameter file") ;
 
-  long seed = 1L;
-  string params_file;
-
-  po::options_description options("Options");
-  po::variables_map vm;
-  options.add_options()
-    ("help", "Produce this help message")
-    ("seed",po::value<long>(&seed)->default_value(time(NULL)), "Set the random seed")
-    ("params",po::value<string>(),"Specify input parameter file") ;
-
-  po::store(po::parse_command_line(argc, argv, options), vm);
-  po::notify(vm);
+    po::store(po::parse_command_line(argc, argv, options), vm);
+    po::notify(vm);
   
-  if(vm.count("help")) {
-    cerr << options << endl;
-    return EXIT_FAILURE;
-  }
-  if(vm.count("params")) {
-    params_file = vm["params"].as<string>();
-  } else {
-    cerr << "[EEMS::Params] Please provide a params file with the following information:" << endl
-	 << "               datapath, mcmcpath, nIndiv, nSites, nDemes" << endl;
-    return EXIT_FAILURE;
-  }
-  
-  cerr << "[EEMS::Params] Random seed = " << seed << endl;
-  
-  Params params(params_file);
-  EEMS eems(params,seed);
-  MCMC mcmc(params);
-
-  eems.initialize(mcmc);
-  cerr << fixed << setprecision(2)
-       << "[RunMCMC] Initial log prior = " << eems.eval_prior( ) << endl
-       << "          Initial log llike = " << eems.eval_likelihood( ) << endl;
-
-  Proposal proposal;
-
-  while (!mcmc.finished) {
-
-    if (!mod(mcmc.currIter,100)) {
-      cerr << "Iteration " << mcmc.currIter << "..." << endl;
+    if(vm.count("help")) {
+      cerr << options << endl; return(EXIT_FAILURE);
     }
     
-    mcmc.start_iteration( );
-    eems.update_s2loc( );
+    Params params(params_file,seed_from_command_line);
+    error = params.check_input_params( );
+    if (error) {
+      cerr << "[RunEEMS] Error parametrizing EEMS." << endl;
+      return(EXIT_FAILURE);      
+    }
+    
+    // Specify the distance metric in the params.ini file
+    dist_metric = params.distance;
 
-    while (!mcmc.iterDone) {
+    EEMS eems(params);
+    MCMC mcmc(params);
+    
+    boost::filesystem::path dir(eems.prevpath().c_str());
+    if (exists(dir)) {
+      cerr << "Load final EEMS state from " << eems.prevpath() << endl << endl;
+      eems.load_final_state();
+    } else {
+      cerr << "Initialize EEMS random state" << endl << endl;
+      eems.initialize_state();
+    }
+    
+    error = eems.start_eems(mcmc);
+    if (error) {
+      cerr << "[RunEEMS] Error starting EEMS." << endl;
+      return(EXIT_FAILURE);
+    }
+    
+    Proposal proposal;
+    
+    while (!mcmc.finished) {
 
-      switch (mcmc.currType) {
-      case 0:
-	eems.propose_qEffcts(proposal,mcmc);
+      switch ( eems.choose_move_type( ) ) {
+      case Q_VORONOI_BIRTH_DEATH:
+	eems.birthdeath_qVoronoi(proposal);
 	break;
-      case 1:
-	eems.move_qVoronoi(proposal,mcmc);
+      case M_VORONOI_BIRTH_DEATH:
+	eems.birthdeath_mVoronoi(proposal);
 	break;
-      case 2:
-	eems.birthdeath_qVoronoi(proposal,mcmc);
+      case Q_VORONOI_POINT_MOVE:
+	eems.move_qVoronoi(proposal);
 	break;
-      case 3:
-	eems.propose_mEffcts(proposal,mcmc);
+      case M_VORONOI_POINT_MOVE:
+	eems.move_mVoronoi(proposal);
 	break;
-      case 4:
+      case Q_VORONOI_RATE_UPDATE:
+	eems.propose_qEffcts(proposal);
+	break;
+      case M_VORONOI_RATE_UPDATE:
+	eems.propose_mEffcts(proposal);
+	break;
+      case M_MEAN_RATE_UPDATE:
 	eems.propose_mrateMu(proposal);
 	break;
-      case 5:
-	eems.move_mVoronoi(proposal,mcmc);
-	break;
       default:
-	eems.birthdeath_mVoronoi(proposal,mcmc);
+	cerr << "[RunEEMS] Unknown move type" << endl;
+	return(EXIT_FAILURE);
       }
 
-      mcmc.add_to_total_moves( );
-      if (eems.accept_proposal(proposal)) { mcmc.add_to_okay_moves( ); }
-      if (params.testing)              { eems.check_ll_computation( ); }
-      mcmc.change_update(eems.num_qtiles(),eems.num_mtiles());
+      mcmc.add_to_total_moves(proposal.type);
+      if (eems.accept_proposal(proposal)) { mcmc.add_to_okay_moves(proposal.type); }
+      if (params.testing) { eems.check_ll_computation( ); }
+      
+      eems.update_sigma2( );
+      eems.update_hyperparams( );
+      mcmc.end_iteration( );
+      
+      // Check whether to save the current parameter state,
+      // as the thinned out iterations are not saved
+      int iter = mcmc.to_save_iteration( );
+      if (iter>=0) {
+	eems.print_iteration(mcmc);
+	eems.save_iteration(mcmc);
+      }      
     }
-
-    eems.update_hyperparams( );
     
-    // Check whether to save the current parameter state
-    int iter = mcmc.to_save_iteration( );
-    if (iter>=0) {
-      cerr << "Ending iteration " << mcmc.currIter << " with acceptance proportions:" << endl;    
-      mcmc.output_proportions(cerr);
-      eems.report_iteration(mcmc.currIter);
-      eems.save_iteration(iter);
-    }
-
-    mcmc.end_iteration( );
-  }
-
-  cerr << fixed << setprecision(2)
-       << "[RunMCMC] Final log prior = " << eems.eval_prior( ) << endl
-       << "          Final log llike = " << eems.eval_likelihood( ) << endl;
-
-  bool done = eems.output_results(mcmc);
-  if (!done) { cerr << "[RunMCMC] Error saving results to " << eems.mcmcpath() << endl; }
-
-  return 0;
+    error = eems.output_results(mcmc);
+    if (error) { cerr << "[RunEEMS] Error saving eems results to " << eems.mcmcpath() << endl; }
+    
+  } catch(exception& e) {
+    cerr << e.what() << endl;
+    return(EXIT_FAILURE);
+  }    
+  
+  return(0);
 }
