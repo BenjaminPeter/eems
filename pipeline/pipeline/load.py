@@ -1,6 +1,72 @@
 import pandas as pd
 import os
 
+# possible ids for population
+allowed_pop_names = ['POP', 'ID', 'POP_ID', 'POP_NAME', 'POP_ORIG',
+                     'POPULATION', 'ECOTYPE_ID', 'POPULATION_ID',
+                     "verbose Population ID", 'Subspecies']
+
+# possible ids for individuals
+allowed_ind_names = ['SAMPLE', 'IID', 'IND', 'INDIVIDUAL',
+                     'INDIVIDUALS', 'ID', 'SAMPLE', 'ILLUMINA_ID',
+                     'SAMPLE_ID']
+
+# possible ids for latitude & longitude
+allowed_lat_names = ['LAT', 'LATITUDE', 'Y', 'LAT-ITUDE']
+allowed_long_names = ['LONG', 'LONGITUDE', 'X', 'LON-GI-TUDE']
+
+
+def load_combined_file(combined_file, combined_has_header=True, format=None,
+                       column_names=None, wrap=True, **kwargs):
+    """load_sample_file
+    
+    loads individuals with sampling coords directly
+
+    Parameters
+    ----------
+    combined_file : file or filename
+        The file to assign samples to populations
+    combined_has_header : bool
+        does the sample have a header row
+    format : str
+        the format of the file, allowed formats are xls, xlsx, or csv. If not
+        given, it is guessed based on extension. Otherwise, read_table is used.
+    column_names : (str, str)
+        the names of the columns to be used for sample id and population id,
+        respectively.
+    
+    Returns
+    -------
+
+    sample_data : pd.DataFrame
+        a data frame with columns 'IND' and `POP` 'LAT' 'LONG' 
+    """
+    read_function = get_read_fun_from_extension(combined_file, format)
+
+    if combined_has_header:
+        sample_data = read_function(combined_file, **kwargs)
+    else:
+        sample_data = read_function(combined_file, header=None, **kwargs)
+        sample_data.columns[:2] = ['IND', 'LAT' 'LONG']
+
+    header = sample_data.columns.values
+    
+    if column_names is None:
+    
+        POP = get_first_id(header, allowed_pop_names)
+        IND = get_first_id(header, allowed_ind_names)
+        LAT = get_first_id(header, allowed_lat_names)
+        LONG = get_first_id(header, allowed_long_names)
+    else:
+        POP, IND = column_names
+
+    sample_data = sample_data[[IND, POP, LAT, LONG]]
+    sample_data.columns = ['IND', 'POP', 'LAT', 'LONG']
+
+    if wrap:
+        sample_data['LONG'] = wrap_america(sample_data['LONG'])
+
+    return sample_data
 
 def load_location_file(location_file, location_has_header=True, format=None,
                        column_names=None, wrap=True,
@@ -46,13 +112,7 @@ def load_location_file(location_file, location_has_header=True, format=None,
     
     if column_names is None:
         # possible ids for population, possibly add more
-        allowed_pop_names = ['POP', 'ID', 'POP_ID', 'POP_NAME', 'POP_ORIG',
-                             'POPULATION', 'ECOTYPE_ID',
-                             "verbose Population ID"]
     
-        # possible ids for latitude & longitude
-        allowed_lat_names = ['LAT', 'LATITUDE', 'Y', 'LAT-ITUDE']
-        allowed_long_names = ['LONG', 'LONGITUDE', 'X', 'LON-GI-TUDE']
     
         POP = get_first_id(header, allowed_pop_names)
         LAT = get_first_id(header, allowed_lat_names)
@@ -109,11 +169,11 @@ def load_sample_file(sample_file, sample_has_header=True, format=None,
     if column_names is None:
         # possible ids for population
         allowed_pop_names = ['POP', 'POP_ID', 'POP_NAME', 'POP_ORIG',
-                             'POPULATION', 'SIMPLE_MAJORITY']
+                             'POPULATION', 'SIMPLE_MAJORITY', 'POPULATION_ID']
         
         # possible ids for individuals
         allowed_ind_names = ['SAMPLE', 'IID', 'IND', 'INDIVIDUAL',
-                             'INDIVIDUALS', 'ID', 'SAMPLE']
+                             'INDIVIDUALS', 'ID', 'SAMPLE', 'ILLUMINA_ID']
     
         POP = get_first_id(header, allowed_pop_names)
         IND = get_first_id(header, allowed_ind_names)
@@ -162,3 +222,5 @@ def wrap_america(data):
 
 def unwrap_america(data):
     return [i - 360 if i >= 180 else i for i in data]
+
+

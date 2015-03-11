@@ -15,6 +15,9 @@ def make_full_paths(args):
     if args.output_folder is None:
         args.output_folder = make_full_path(args.analysis_folder,
                                             'output')
+    else:
+        args.output_folder = make_full_path(args.analysis_folder,
+                                            args.output_folder)
     if not os.path.exists(args.output_folder):
         os.makedirs(args.output_folder)
     for nd in args.nDemes:
@@ -27,6 +30,9 @@ def make_full_paths(args):
     if args.input_folder is None:
         args.input_folder = make_full_path(args.analysis_folder,
                                            'input')
+    else:
+        args.input_folder = make_full_path(args.analysis_folder,
+                                            args.input_folder)
     if not os.path.exists(args.input_folder):
         os.makedirs(args.input_folder)
 
@@ -188,6 +194,12 @@ class Parameters(utils.parameters.Parameters):
                             that should be included in the analysis. Default:
                             None
                             """)
+        parser.add_argument('--population',
+                            nargs="*",
+                            default=None,
+                            action='append',
+                            help="""A set of populations that will be retained
+                            """)
         parser.add_argument('--hull', '--convex-hull', '--convex_hull',
                             default=False,
                             action='store_true',
@@ -308,6 +320,14 @@ class Parameters(utils.parameters.Parameters):
         parser.add_argument('--n_runs', '--nruns', '--n-runs',
                             default=1, help="""the number of independendt eems
                             runs to be started. (default 1)""")
+        parser.add_argument('--run_script', '--run-script',
+                            default=False, action='store_true',
+                            help="""should a run submit script be generated?
+                            """)
+        parser.add_argument('--submit_script', '--submit-script',
+                            default=False, action='store_true',
+                            help="""should a submit script be generated?
+                            """)
 
     @staticmethod
     def create_parser_folders(parser):
@@ -412,6 +432,12 @@ class Parameters(utils.parameters.Parameters):
             if type(p.region[0]) is list:
                 p.region = [item for sublist in p.region 
                             for item in sublist]
+
+        if p.population is not None:
+            if type(p.population[0]) is list:
+                p.population = [item for sublist in p.population 
+                            for item in sublist]
+
         p.eems_args = dict()
         p.eems_args['diploid'] = p.diploid.lower()
         p.eems_args['numMCMCIter'] = p.numMCMCIter

@@ -313,26 +313,32 @@ class CountryMP(Country):
 
 
 def handle_special_countries(c):
+    print c.keys()
     c['Iceland'].patch = ops.cascaded_union([c['Iceland'].patch, c['England'].patch,
                                              c['Ireland'].patch]).convex_hull
     c['Madagascar'].patch = ops.cascaded_union([c['Madagascar'].patch,
                                              c['Mozambique'].patch]).convex_hull
+    c['North I.'].patch = ops.cascaded_union([c['North I.'].patch,
+                                             c['South I.'].patch]).convex_hull
+    c['North I.'].patch = ops.cascaded_union([c['North I.'].patch,
+                                             c['Australia'].patch]).convex_hull
     c['Madagascar'].__class__ = c['Iceland'].__class__
     c['Malaysia'].patch = c['Malaysia'].patch.buffer(1)
     c['Indonesia'].patch = c['Indonesia'].patch.buffer(1)
     c['Indonesia'].__class__ = c['Iceland'].__class__
     c['Malaysia'].__class__ = c['Iceland'].__class__
+#    c['New Zealand'].__class__ = c['Iceland'].__class__
     c['Hawaii'].continent = ''
     c['Falkland Is.'].continent = ''
     
 
-
-def load_countries(s, wrap_americas=True):
+def load_countries(s, wrap_americas=True, remove_northern_islans=True):
     patches = fiona.collection(s)
     countries = CountryContainer()
     special_countries = dict()
     special_country_ids = ['England', 'Ireland', 'Iceland', 'Madagascar', 'Mozambique',
                            'Malaysia', 'Indonesia', 'Hawaii', 'Falkland Is.']
+    special_country_ids.extend(['Australia', 'North I.', 'South I.'])
     for p in patches:
         if p['geometry']['type'] is 'Polygon':
             c = CountryP(p['geometry'], p['properties'])
@@ -351,10 +357,12 @@ def load_countries(s, wrap_americas=True):
     if wrap_americas:
         countries.wrap_americas()
 
-    russia = ['Russia', 'Norway', 'Greenland']
-    for r in russia:
-        r = countries[r]
-        r.remove_northern_islands(limit=70)
+    if remove_northern_islans:
+        russia = ['Russia', 'Norway', 'Greenland']
+        for r in russia:
+            r = countries[r]
+            r.remove_northern_islands(limit=70)
+
     return countries
 
 

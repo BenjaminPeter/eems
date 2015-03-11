@@ -99,6 +99,14 @@ def get_eems_area(params, meta_data):
         the potentially filtered meta_data object
     """
 
+    if params.population is not None:
+        to_keep = [s in params.population
+                   for s in meta_data.POP]
+        meta_data = meta_data[to_keep]
+        meta_data.index = range(len(meta_data))
+
+    print params.population
+
     create_points(meta_data)
     if params.polygon is None and params.region is not None:
         poly1 = get_region_polygon(params.region, params.map,

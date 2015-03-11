@@ -1,11 +1,5 @@
 require(snpStats) #for read.plnk function
 
-#source("wishart.r")
-
-
-#project.folder = "/data/eems-project/human_origins/projects/europe/input/europe"
-#delta.folder = "/data/eems-project/human_origins/projects/europe/output/300_1/"
-
 
 
 tot.n.snp = 600000

@@ -3,6 +3,7 @@ import numpy as np
 from load import unwrap_america
 import pandas as pd
 from utils.plink import run_plink
+from random import randint
 
 
 TMP_PLINK = 'tmp_plink'
@@ -43,7 +44,7 @@ def run_eems(eems_exe, ini_file, n_demes, dry=False):
 
 def write_all_files(args, meta_data, polygon):
     if args.diffs is None:
-        create_eems_files(meta_data=meta_data, polygon=polygon,
+        create_eems_files(args, meta_data=meta_data, polygon=polygon,
                           bed2diffs=args.bed2diffs,
                           bedfile=TMP_PLINK,
                           eems_input_name=args.proj,
@@ -51,7 +52,7 @@ def write_all_files(args, meta_data, polygon):
                           n_runs=args.n_runs,
                           **args.eems_args)
     else:
-        create_eems_files(meta_data=meta_data, polygon=polygon,
+        create_eems_files(args, meta_data=meta_data, polygon=polygon,
                           bedfile=TMP_PLINK,
                           bed2diffs=args.bed2diffs,
                           diffs_file=args.diffs,
@@ -84,10 +85,14 @@ def filter_data(meta_data, bedfile, plink="plink"):
                         skipinitialspace=True, sep=" ")
     fam.columns = ['FAM', 'IND', 'a', 'b', 'c', 'd']
 
-    extract_data = meta_data.merge(fam, on='IND', how='left')
+    extract_data = meta_data.merge(fam, on='IND', how='inner')
     extract_data.to_csv(include_name, sep=' ',
                         columns=('FAM', 'IND'),
                         header=None, index=None)
+
+    meta_data = extract_data[['IND', 'POP', 'LAT', 'LONG', 'FAM']]
+    meta_data = meta_data[np.logical_not(np.isnan(meta_data['LAT']))]
+    meta_data = meta_data[np.logical_not(np.isnan(meta_data['LONG']))]
 
     flags = dict()
     flags['make-bed'] = ''
@@ -98,8 +103,10 @@ def filter_data(meta_data, bedfile, plink="plink"):
 
     run_plink(plink, flags)
 
+    return meta_data
 
-def create_eems_files(meta_data=None, polygon=None,
+
+def create_eems_files(args, meta_data=None, polygon=None,
                       bed2diffs="bed2diffs",
                       bedfile=None, diffs_file=None,
                       eems_input_name="eems_input",
@@ -140,6 +147,14 @@ def create_eems_files(meta_data=None, polygon=None,
     create_polygon_file(polygon, eems_input_name)
     create_sample_file(meta_data, eems_input_name, order_file=eems_input_name)
 
+    if args.submit_script:
+        ss_name = "%s-submit.sh" % args.proj
+        ss = open(ss_name, 'w')
+        ss.write(submit_script_header())
+    if args.run_script:
+        rs_name = "%s-run.sh" % args.proj
+        rs = open(rs_name, 'w')
+
     nSites = sum(1 for line in open("%s.bim" % bedfile))
     nDemes = kwargs['nDemes']
     del kwargs['nDemes']
@@ -152,12 +167,52 @@ def create_eems_files(meta_data=None, polygon=None,
                 ini_name = "%s_%s_run%s" % (eems_input_name, nd, i)
                 out_name = "%s/%s_run%s" % (eems_output_name, nd, i)
 
-                create_ini_file(ini_name, datapath=eems_input_name,
-                                mcmcpath=out_name,
-                                meta_data=meta_data,
-                                nSites=nSites, n_demes=nd, **kwargs)
+            create_ini_file(ini_name, datapath=eems_input_name,
+                            mcmcpath=out_name,
+                            meta_data=meta_data,
+                            nSites=nSites, n_demes=nd, **kwargs)
 
+            if args.run_script:
+                rs.write("%s --params %s.ini &\n" % (args.eems_snps, ini_name))
+            if args.submit_script:
+                ss.write('submit %s.ini\n' % ini_name)
+
+    if args.run_script:
+        rs.close()
+    if args.submit_script:
+        ss.close()
     kwargs['nDemes'] = nDemes
+
+
+def submit_script_header():
+    s = """
+#!/bin/bash
+EEMS="$HOME/eems/runeems_snps/src/runeems_snps"
+mkdir -p logs/
+submit()
+{
+        inifile=`basename $1`
+        extension="${inifile##*.}"
+        fileid="${inifile%.*}"
+
+        echo "#!/bin/bash" > submit.sh
+        echo "#$ -N $fileid" >> submit.sh
+        echo "#$ -l h_vmem=4g" >> submit.sh
+        echo "#$ -l s_rt=168:00:00" >> submit.sh
+        echo "#$ -l h_rt=168:00:00" >> submit.sh
+        echo "#$ -cwd" >> submit.sh
+        echo "#$ -V" >> submit.sh
+        echo "#$ -e logs/\$JOB_NAME_\$JOB_ID.err" >> submit.sh
+        echo "#$ -o logs/\$JOB_NAME_\$JOB_ID.out" >> submit.sh
+        echo "$EEMS --params $1 --seed \$JOB_ID" >> submit.sh
+
+        qsub submit.sh
+}
+
+"""
+
+    return s
+
 
 
 def create_diffs_file(bedfile, bed2diffs, outname, nthreads=4):
@@ -207,6 +262,7 @@ def create_ini_file(ini_name, mcmcpath, datapath, meta_data,
     kwargs['numThinIter'] = kwargs.get('numThinIter', 99)
     kwargs['datapath'] = datapath
     kwargs['mcmcpath'] = mcmcpath
+    kwargs['seed'] = randint(0, 10000000)
 
     with open("%s.ini" % ini_name, 'w') as f:
         for k, v in kwargs.iteritems():
@@ -232,6 +288,12 @@ def filter_diffs_file(diffs_file, individuals, outname):
     sample_order = pd.read_table("%s.order" % diffs_file, header=None, sep=" ")
     individuals = pd.DataFrame(individuals)
     individuals.columns = [0]
+
+    print individuals[0]
+
+    for i in individuals[0]:
+        print i
+        print np.where(i == sample_order[1])[0][0]
 
     to_keep = [np.where(i == sample_order[1])[0][0] for i in individuals[0]]
     new_diff_matrix = diff_matrix[to_keep][:, to_keep]
