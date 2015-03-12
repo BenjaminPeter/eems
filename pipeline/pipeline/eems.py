@@ -106,6 +106,17 @@ def filter_data(meta_data, bedfile, plink="plink"):
     return meta_data
 
 
+def make_grid(grid, gridfile, outname):
+    scriptpath = '/data/eems-project/eems/pipeline/pipeline/maps/extract_points.r'
+    grid2 = '/data/eems-project/eems/pipeline/pipeline/maps/grid%s' % grid
+    outer = '%s.outer' % outname
+    sample = '%s.coord' % outname
+    tpl = (scriptpath, grid2, outer, sample, gridfile)
+    s = "Rscript %s %s %s %s %s" % tpl
+    print s
+    os.system(s)
+
+
 def create_eems_files(args, meta_data=None, polygon=None,
                       bed2diffs="bed2diffs",
                       bedfile=None, diffs_file=None,
@@ -146,6 +157,11 @@ def create_eems_files(args, meta_data=None, polygon=None,
 
     create_polygon_file(polygon, eems_input_name)
     create_sample_file(meta_data, eems_input_name, order_file=eems_input_name)
+
+    if args.grid != 0:
+        kwargs['gridpath'] = "%s_%s" % (eems_input_name, args.grid)
+        print "GRID AT", kwargs['gridpath']
+        make_grid(args.grid, kwargs['gridpath'], eems_input_name)
 
     if args.submit_script:
         ss_name = "%s-submit.sh" % args.proj

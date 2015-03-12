@@ -67,6 +67,14 @@ class Parameters(utils.parameters.Parameters):
 
     @staticmethod
     def create_parser_eems(parser):
+        parser.add_argument('--grid', default=0, help="""
+                            If a custom grid (with earth curvature)
+                            should be used. If yes, the population grid
+                            is calculated from a precalcualted set of 3 
+                            grids with different densities. Set parameter 
+                            to 100, 250 or 500 for highest to lowest number 
+                            of grid. 0 uses builtin grid.
+                            """)
         parser.add_argument('--nDemes',
                             default=[100], nargs='*',
                             help="""eems arg: number of demes in the model
