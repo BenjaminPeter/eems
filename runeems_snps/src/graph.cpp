@@ -13,7 +13,7 @@ void Graph::generate_grid(const string &datapath, const string &gridpath, const 
   if (gridpath.empty()) {
     cerr << "  Generate population grid and sample assignment"<< endl;
     make_triangular_grid(habitat,nDemeDensity);
-    map_indiv_to_deme(gridpath,nIndiv);
+    map_indiv_to_deme(datapath,nIndiv);
   } else {
     cerr << "  Load population grid and sample assignment from " << gridpath << endl;
     // Read the population grid (demes and edges)
@@ -105,6 +105,7 @@ void Graph::make_triangular_grid(const Habitat &habitat, const int nDemeDensity)
  */
 void Graph::map_indiv_to_deme(const string &datapath, const int nIndiv) {
   MatrixXd IndivCoord = readMatrixXd(datapath + ".coord");
+  cerr << "READING INDIV " << datapath + ".coord"  << "\t" << IndivCoord.rows() << "\t" << IndivCoord.cols() << endl;
   if (IndivCoord.rows()!=nIndiv || IndivCoord.cols()!=2) {
     cerr << "  Error reading sample coordinates from " << datapath + ".coord" << endl
 	 << "  Expect a list of " << nIndiv << " points, with two coordinates per line" << endl; exit(1);
