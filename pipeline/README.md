@@ -57,21 +57,21 @@ then  view the notebook in a webbrowser
 
 ### Usage (2015-01-19)
 
-
     usage: eems_pipeline [-h] [--bed BED] [--diffs DIFFS] [--loc LOC]
                          [--loc-has-no-header] [--loc-has-header]
                          [--sample-has-no-header] [--sample-has-header]
                          [--sample SAMPLE] [--ind IND] [--ind-has-no-header]
-                         [--ind-has-header] [--polygon POLYGON] [--wrap WRAP]
-                         [--region [REGION [REGION ...]]] [--hull] [--envelope]
-                         [--region-buffer REGION_BUFFER]
+                         [--ind-has-header] [--sd SD] [--polygon POLYGON]
+                         [--wrap WRAP] [--region [REGION [REGION ...]]]
+                         [--population [POPULATION [POPULATION ...]]] [--hull]
+                         [--envelope] [--region-buffer REGION_BUFFER]
                          [--sample-buffer SAMPLE_BUFFER]
                          [--map-projection MAP_PROJECTION] [--map MAP]
                          [--eems EEMS] [--bed2diffs BED2DIFFS]
                          [--eems_snps EEMS_SNPS] [--input-folder INPUT_FOLDER]
                          [--output-folder OUTPUT_FOLDER] [--tmp-folder TMP_FOLDER]
                          [--analysis-folder ANALYSIS_FOLDER]
-                         [--data-folder DATA_FOLDER] [--proj PROJ]
+                         [--data-folder DATA_FOLDER] [--proj PROJ] [--grid GRID]
                          [--nDemes [NDEMES [NDEMES ...]]] [--diploid DIPLOID]
                          [--numMCMCIter NUMMCMCITER] [--numBurnIter NUMBURNITER]
                          [--numThinIter NUMTHINITER] [--negBiSize NEGBISIZE]
@@ -83,8 +83,10 @@ then  view the notebook in a webbrowser
                          [--qSeedsProposalS2 QSEEDSPROPOSALS2]
                          [--mEffctProposalS2 MEFFCTPROPOSALS2]
                          [--qEffctProposalS2 QEFFCTPROPOSALS2]
-                         [--mrateMuProposalS2 MRATEMUPROPOSALS2] [--dry]
-                         [--n_runs N_RUNS]
+                         [--mrateMuProposalS2 MRATEMUPROPOSALS2]
+                         [--saveMatrices SAVEMATRICES]
+                         [--numOutputIter NUMOUTPUTITER] [--prev PREV] [--dry]
+                         [--n_runs N_RUNS] [--run_script] [--submit_script]
 
     optional arguments:
       -h, --help            show this help message and exit
@@ -128,6 +130,8 @@ then  view the notebook in a webbrowser
                             and longitude, respectively.
       --ind-has-header      add this flag if the ind file (--ind) does have a
                             header line.
+      --sd SD               File with individual based sd information. Should have
+                            a column named `sample` and columns named `sd.
 
     map options:
       These options control in what space the eems algorithm is run. There are
@@ -141,6 +145,8 @@ then  view the notebook in a webbrowser
       --region [REGION [REGION ...]]
                             A set of continents, regions or countries that should
                             be included in the analysis. Default: None
+      --population [POPULATION [POPULATION ...]]
+                            A set of populations that will be retained
       --hull, --convex-hull, --convex_hull
                             should a convex hull around the samples be computed?
                             If yes, an intersection of the samples and their
@@ -196,6 +202,11 @@ then  view the notebook in a webbrowser
                             The name of the output files
 
     eems runtime options:
+      --grid GRID           If a custom grid (with earth curvature) should be
+                            used. If yes, the population grid is calculated from a
+                            precalcualted set of 3 grids with different densities.
+                            Set parameter to 100, 250 or 500 for highest to lowest
+                            number of grid. 0 uses builtin grid.
       --nDemes [NDEMES [NDEMES ...]]
                             eems arg: number of demes in the model (default: 100 )
       --diploid DIPLOID     eems arg: is diploid? (true/false) (default: true )
@@ -231,9 +242,19 @@ then  view the notebook in a webbrowser
                             eems arg (default: 0.001 )
       --mrateMuProposalS2 MRATEMUPROPOSALS2
                             eems arg (default: 0.01 )
+      --saveMatrices SAVEMATRICES
+                            eems arg (default: 1 )
+      --numOutputIter NUMOUTPUTITER
+                            eems arg (default: 10 )
+      --prev PREV, --prevpath PREV
+                            eems arg (default: '' )
 
     further options:
       --dry                 if set, files are created, but eems is not ran
       --n_runs N_RUNS, --nruns N_RUNS, --n-runs N_RUNS
                             the number of independendt eems runs to be started.
                             (default 1)
+      --run_script, --run-script
+                            should a run submit script be generated?
+      --submit_script, --submit-script
+                            should a submit script be generated?
