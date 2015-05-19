@@ -29,7 +29,7 @@ def create_plots(plot_scripts_folder, out_path, in_path, tmp_script, wrap):
         coords_file = '%s.coord' % in_path
     data = np.loadtxt(coords_file)
     data[:, 1] = unwrap_america(data[:, 1])
-    np.savetxt(coords_file, data, fmt="%f")
+    np.savetxt(coords_file, data, fmt="%2.2f")
     os.system('Rscript %s' % tmp_script)
 
 
@@ -96,6 +96,7 @@ def filter_data(meta_data, bedfile, plink="plink"):
 
     flags = dict()
     flags['make-bed'] = ''
+    flags['allow-extra-chr'] = ''
     flags['bfile'] = bedfile
     flags['out'] = TMP_PLINK
     flags['keep'] = include_name
@@ -156,9 +157,16 @@ def create_eems_files(args, meta_data=None, polygon=None,
         raise ValueError("either bedfile or diffs_file needs to be specified")
 
     create_polygon_file(polygon, eems_input_name)
-    create_sample_file(meta_data, eems_input_name, order_file=eems_input_name)
+    if args.sd is None:
+        create_sample_file(meta_data, eems_input_name, 
+                           order_file=eems_input_name)
+    else:
+        print meta_data.columns
+        create_sample_file_jitter(meta_data, eems_input_name,
+                                  order_file=eems_input_name,
+                                  n_runs=int(args.n_runs))
 
-    if args.grid != 0:
+    if args.grid != 0 and args.sd is None:
         kwargs['gridpath'] = "%s_%s" % (eems_input_name, args.grid)
         print "GRID AT", kwargs['gridpath']
         make_grid(args.grid, kwargs['gridpath'], eems_input_name)
@@ -176,17 +184,34 @@ def create_eems_files(args, meta_data=None, polygon=None,
     del kwargs['nDemes']
     for nd in nDemes:
         for i in xrange(int(n_runs)):
-            if n_runs == 1:
+            if args.sd is not None:
+                ini_name = "%s_%s_run%s" % (eems_input_name, nd, i)
+                out_name = "%s/%srun%s" % (eems_output_name, nd, i)
+                datapath = "%s%d" % (eems_input_name, i)
+                os.link("%s.diffs" % eems_input_name, "%s.diffs" % datapath)
+                os.link("%s.outer" % eems_input_name, "%s.outer" % datapath)
+                os.link("%s.order" % eems_input_name, "%s.order" % datapath)
+
+
+                if args.grid != 0 :
+                    kwargs['gridpath'] = "%s_%s" % (datapath, args.grid)
+                    print "GRID AT", kwargs['gridpath']
+                    make_grid(args.grid, kwargs['gridpath'], datapath)
+
+            elif n_runs == 1:
                 ini_name = "%s_%s" % (eems_input_name, nd)
                 out_name = "%s/%s" % (eems_output_name, nd)
+                datapath = eems_input_name
             else:
                 ini_name = "%s_%s_run%s" % (eems_input_name, nd, i)
                 out_name = "%s/%s_run%s" % (eems_output_name, nd, i)
+                datapath = eems_input_name
 
-            create_ini_file(ini_name, datapath=eems_input_name,
+            create_ini_file(ini_name, datapath=datapath,
                             mcmcpath=out_name,
                             meta_data=meta_data,
-                            nSites=nSites, n_demes=nd, **kwargs)
+                            nSites=nSites, n_demes=nd,
+                            **kwargs)
 
             if args.run_script:
                 rs.write("%s --params %s.ini &\n" % (args.eems_snps, ini_name))
@@ -342,8 +367,49 @@ def create_sample_file(meta_data, outname, order_file=None):
         meta_data = sample_order.merge(meta_data, how="left", left_on=1,
                                        right_on='IND')
 
-    meta_data.to_csv(out, sep=" ", header=False, index=False,
+    meta_data.to_csv(out, sep=" ", header=False, index=False, float_format="%2.2f",
                      columns=('LONG', 'LAT'))
+
+
+def create_sample_file_jitter(meta_data, outname, order_file=None,
+                              n_runs=1):
+    """create_sample_file_jitter
+
+    creates a set of sample files with some normal jitter added
+    
+    Parameters
+    ----------
+    meta_data : pd.DataFrame
+        data frame of the meta data
+    outname : path
+        the file of the outputed sample file (without extension)
+    order_file : path
+        a file with the sample ordering (without extension .order).
+        This file is created by bed2diffs. If present, the sample
+        coordinates are aligned with this file
+    n_runs : int
+        the number of input files created
+    """
+    if order_file is not None:
+        sample_order = pd.read_table("%s.order" % order_file, header=None,
+                                     sep=" ")
+        meta_data = sample_order.merge(meta_data, how="left", left_on=1,
+                                       right_on='IND')
+
+
+    out = "%s.sample" % (outname)
+    meta_data.to_csv(out, sep=" ", header=True, index=False,
+                     columns=('IND', 'POP', 'LONG', 'LAT', 'SD'))
+    for i in range(n_runs):
+        out = "%s%d.coord" % (outname, i)
+        a = np.random.normal(meta_data['LONG'], meta_data['SD'])
+        b = np.random.normal(meta_data['LAT'], meta_data['SD'])
+        a = ["%2.2f" % i for i in a]
+        b = ["%2.2f" % i for i in b]
+        temp_data = pd.DataFrame(zip(a, b), columns=('LONG', 'LAT'))
+
+        temp_data.to_csv(out, sep=" ", header=False, index=False,
+                         columns=('LONG', 'LAT'))
 
 
 def create_polygon_file(polygon, outname):

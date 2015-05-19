@@ -52,7 +52,6 @@ def load_combined_file(combined_file, combined_has_header=True, format=None,
     header = sample_data.columns.values
     
     if column_names is None:
-    
         POP = get_first_id(header, allowed_pop_names)
         IND = get_first_id(header, allowed_ind_names)
         LAT = get_first_id(header, allowed_lat_names)
@@ -224,3 +223,49 @@ def unwrap_america(data):
     return [i - 360 if i >= 180 else i for i in data]
 
 
+def load_sd_file(sd_file, sd_has_header=True, format=None, **kwargs):
+    """load_sd_file
+    
+    loads standard deviation for samples with unknown location
+    if this option is used, it requires for each sample to have
+    a degree of uncertainty in it's location. Instead of fixed
+    sample location, samples will then have a bivariate normal
+    distribution with mean given by the coordinates in the other
+    file, and sd given here. The sd_file has two columns:
+    the first gives the individual id, the second one gives the sd of
+    the normal
+
+    Parameters
+    ----------
+    sd_file : file or filename
+        The file that assignes sd to sample distribution
+    sd_has_headere : bool
+        Does the file have a header line?
+    format : str
+        the format of the file, allowed formats are xls, xlsx, or csv. If not
+        given, it is guessed based on extension. Otherwise, read_table is used.
+    
+    Returns
+    -------
+
+    sd_data : pd.DataFrame
+        a data frame with columns 'IND' and `SD`
+    """
+    read_function = get_read_fun_from_extension(sd_file, format)
+
+    if sd_has_header:
+        sd_data = read_function(sd_file, **kwargs)
+    else:
+        sd_data = read_function(sd_file, header=None, **kwargs)
+        sd_data.columns[:2] = ['IND', 'SD']
+
+    header = sd_data.columns.values
+    
+    IND = get_first_id(header, allowed_ind_names)
+    SD = get_first_id(header, ['SD'])
+
+    sd_data = sd_data[[IND, SD]]
+    sd_data.columns = ['IND', 'SD']
+
+
+    return sd_data

@@ -108,6 +108,7 @@ def get_eems_area(params, meta_data):
     print params.population
 
     create_points(meta_data)
+    print meta_data
     if params.polygon is None and params.region is not None:
         poly1 = get_region_polygon(params.region, params.map,
                                    params.region_buffer, params.wrap)

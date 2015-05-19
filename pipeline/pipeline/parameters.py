@@ -9,6 +9,9 @@ def make_full_paths(args):
     args.sample = make_full_path(args.data_folder, args.sample)
     args.loc = make_full_path(args.data_folder, args.loc)
 
+    if args.sd is not None:
+        args.sd = make_full_path(args.data_folder, args.sd)
+
     if not os.path.exists(args.analysis_folder):
         os.makedirs(args.analysis_folder)
 
@@ -320,6 +323,12 @@ class Parameters(utils.parameters.Parameters):
                             action='store_true', dest="ind_header", help="""add this flag if the
                             ind file (--ind) does have a header line."""
                             )
+
+        parser.add_argument('--sd', default=None,
+                            help=""" File with individual based
+                            sd information.
+                            Should have a column named `sample` and
+                            columns named `sd.""")
 
     @staticmethod
     def create_parser_further_args(parser):
