@@ -160,10 +160,11 @@ bool EEMS::start_eems(const MCMC &mcmc) {
   mcmczCoord.clear();
   this->eval_prior();
   this->eval_likelihood();
+  cerr << "Prev Path: " <<  params.prevpath << endl;
   cerr << "Input parameters: " << endl << params << endl
        << "Initial log prior: " << nowpi << endl
        << "Initial log llike: " << nowll << endl << endl;
-  if ((nowpi==-Inf) || (nowpi==Inf) || (nowll==-Inf) || (nowll==Inf)) { error = true; }
+  //if ((nowpi==-Inf) || (nowpi==Inf) || (nowll==-Inf) || (nowll==Inf)) { error = true; }
   return(error);
 }
 MoveType EEMS::choose_move_type( ) {

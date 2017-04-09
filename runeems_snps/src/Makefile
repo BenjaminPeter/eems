@@ -1,5 +1,5 @@
 
-EIGEN_INC = /opt/local/include/eigen3
+EIGEN_INC = /usr/include/eigen3
 BOOST_LIB = /opt/local/lib
 BOOST_INC = /opt/local/include
 

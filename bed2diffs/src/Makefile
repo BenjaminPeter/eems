@@ -1,16 +1,16 @@
 
 .PHONY: all
 
-PLINKIO = /usr/local
+PLINKIO = /home/bpeter/programs/libplinkio/src/
 EXE = bed2diffs_v1
 OBJ = bed2diffs_v1.o data.o
 
-CXXFLAGS = -I${PLINKIO}/include -O3 -Wall -Werror -fopenmp
-LDFLAGS = -L${PLINKIO}/lib -lplinkio
+CXXFLAGS = -I${PLINKIO}/include -O3 -Wall -Werror -fopenmp -static
+LDFLAGS = -lplinkio -L${PLINKIO}/lib 
 
 all: $(EXE)
 $(EXE): $(OBJ)
-	$(CXX) $(CXXFLAGS) -o $(EXE) $^ $(LDFLAGS)
+	$(CXX)  $(CXXFLAGS) -o $(EXE) $^ $(LDFLAGS)
 $(OBJ): %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 clean:
